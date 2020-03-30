@@ -1,26 +1,3 @@
-"""
-[Didactic code](https://github.com/lbluque/fmm/blob/master/fmm.py)
-
-Summarizing the didactic code:
-
-  * You build a quadtree of some sort over the source points
-  * You take each leaf cell of the quadtree and calculate a multipole expansion of the cell's points around the cell's center
-  * You work up from the leaves, shifting the expansions of the children to the center of the parent cell and summing them 
-  * You build a quadtre of some sort over the target points.
-  * You work down from the root, shifting the parent's inner expansion to the center of the child cell, then summing it with the converted, shifted expansions of all the source cells in the interaction set. 
-  * At the leaves, you evaluate the inner expansion at each point, then add the contributions from the sources not abstracted by the expansion. 
-
-So the key operations are:
-
-  * Tree-building
-  * Creating the leaves' outer expansions
-  * Shifting an outer expansion to a new center
-  * Shifting an inner expansion to a new center
-  * Converting an outer expansion to an inner expansion
-  * Summing interactions with neighbours not covered by the expansion
-
-
-"""
 import aljpy
 import numpy as np
 import matplotlib.pyplot as plt
