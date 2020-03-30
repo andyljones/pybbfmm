@@ -85,7 +85,7 @@ class SourceInternal(Vertex):
         total = 0
         for child in self.children.flatten():
             nodes = self.into(child.outof(child.nodes()))
-            total += (child.weights()*similarity(self.nodes(), nodes)).sum(-1)
+            total += (similarity(self.nodes(), nodes)*child.weights()).sum(-1)
         return total
 
 class SourceLeaf(Vertex):
@@ -97,7 +97,7 @@ class SourceLeaf(Vertex):
 
     def weights(self):
         S = similarity(self.nodes(), self.into(self.points))
-        return (S*self.charges[None, :]).sum(-1)
+        return (S*self.charges).sum(-1)
 
 def allocate(points, lims):
     ds = np.arange(points.ndim)
@@ -122,3 +122,18 @@ def source_tree(points, charges, cutoff=5, lims=None):
         return SourceInternal(children, lims)
     else:
         return SourceLeaf(points, charges, lims)
+
+
+def test_similarity():
+    lims = np.array([[-1], [+1]])
+    v = Vertex(lims)
+
+    def g(x):
+        return (x**5).sum(-1)
+
+    ns = v.nodes()
+    xs = np.linspace(-1, +1, 101)[:, None]
+    ghat = (similarity(xs, ns)*g(ns)).sum(-1)
+
+    plt.plot(xs[:, 0], g(xs))
+    plt.plot(xs[:, 0], ghat)
