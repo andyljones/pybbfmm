@@ -6,11 +6,11 @@ from itertools import product
 def quad_kernel(a, b):
     return 1/((a - b)**2).sum(-1)
 
-def random_problem(M=3, N=5, D=2):
+def random_problem(S=3, T=5, D=2):
     return aljpy.dotdict(
-        sources=np.random.uniform(-1., +1., (M, D)),
-        charges=np.random.uniform(.1, 1., (M,)),
-        targets=np.random.uniform(-1., +1., (N, D)))
+        sources=np.random.uniform(-1., +1., (S, D)),
+        charges=np.random.uniform(.1, 1., (S,)),
+        targets=np.random.uniform(-1., +1., (T, D)))
 
 def analytic_solution(prob, kernel=quad_kernel):
     k = kernel(prob.sources[..., None, :, :], prob.targets[..., :, None, :])
@@ -32,49 +32,84 @@ def plot(prob, soln=None, q=.01):
     return ax
 
 KERNEL = quad_kernel
-TERMS = 20
+N = 5
 
-def chebyshev_nodes(lower, upper):
-    ms = np.arange(TERMS)
-    nodes = np.cos((2*ms+1)*np.pi/(2*TERMS))
+def similarity(a, b):
+    """
+    Args:
+        a: (m, d)
+        b: (j, d)
+    
+    Returns:
+        (m, j)
 
-    mid = (upper + lower)/2
-    half = (upper - lower)/2
-    return half[None, :]*nodes[:, None] + mid
+    """
+    theta_a = np.arccos(a)[:, None, :, None]
+    theta_b = np.arccos(b)[None, :, :, None]
 
-class Node:
+    ks = np.arange(1, N)[None, None, None, :]
+    terms = np.cos(ks*theta_a)*np.cos(ks*theta_b)
+    return (1/N + 2/N*terms.sum(-1)).prod(-1)
+
+class Vertex:
 
     def __init__(self, lims):
         super().__init__()
         self.lims = lims
-        self.nodes = chebyshev_nodes(lims[0], lims[1])
 
-class SourceNode(Node):
+    def center(self):
+        return self.lims.mean(0)
+
+    def scale(self):
+        return (self.lims[1] - self.lims[0])/2
+
+    def into(self, xs):
+        return (xs - self.center())/self.scale()
+
+    def outof(self, xs):
+        return xs*self.scale() + self.center()
+
+    def nodes(self):
+        D = self.lims.shape[-1]
+        ms = np.arange(N)
+        onedim = np.cos((ms+1/2)*np.pi/N)
+        return np.stack(np.meshgrid(*[onedim]*D), axis=-1).reshape(-1, D)
+
+class SourceInternal(Vertex):
 
     def __init__(self, children, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.children = children
 
-class SourceLeaf(Node):
+    def weights(self):
+        total = 0
+        for child in self.children.flatten():
+            nodes = self.into(child.outof(child.nodes()))
+            total += (child.weights()*similarity(self.nodes(), nodes)).sum(-1)
+        return total
 
-    def __init__(self, points, aux, *args, **kwargs):
+class SourceLeaf(Vertex):
+
+    def __init__(self, points, charges, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.points = points
-        self.aux = aux
+        self.charges = charges
 
-    def anterpolate(self):
-        pass
+    def weights(self):
+        S = similarity(self.nodes(), self.into(self.points))
+        return (S*self.charges[None, :]).sum(-1)
 
 def allocate(points, lims):
+    ds = np.arange(points.ndim)
     center = lims.mean(0)
     criticals = np.stack([lims[0], center, lims[1]])
-    breakpoint()
     sides = (points > center)
     options = np.stack(list(product([False, True], repeat=points.ndim)))
     for option in options:
         mask = (sides == option).all(-1)
         option = option.astype(int)
-        sublims = np.stack([criticals[option], criticals[option+1]])
+        
+        sublims = np.stack([criticals[option, ds], criticals[option+1, ds]])
 
         yield (tuple(option), mask, sublims)
 
@@ -84,6 +119,6 @@ def source_tree(points, charges, cutoff=5, lims=None):
         children = np.empty((2,)*points.ndim, dtype=object)
         for option, mask, sublims in allocate(points, lims):
             children[option] = source_tree(points[mask], charges[mask], cutoff, sublims)
-        return SourceNode(children, lims)
+        return SourceInternal(children, lims)
     else:
         return SourceLeaf(points, charges, lims)
