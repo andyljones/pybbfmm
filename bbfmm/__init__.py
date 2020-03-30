@@ -84,6 +84,9 @@ class SourceInternal(Vertex):
         super().__init__(*args, **kwargs)
         self.children = children
 
+    def height(self):
+        return max(self.children)
+
     def weights(self):
         total = 0
         for child in self.children.flatten():
