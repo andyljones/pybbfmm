@@ -32,7 +32,7 @@ def plot(prob, soln=None, q=.01):
     return ax
 
 KERNEL = quad_kernel
-N = 5
+N = 10 
 
 def similarity(a, b):
     """
@@ -44,6 +44,9 @@ def similarity(a, b):
         (m, j)
 
     """
+    assert ((-1 <= a) & (a <= +1)).all()
+    assert ((-1 <= b) & (b <= +1)).all()
+
     theta_a = np.arccos(a)[:, None, :, None]
     theta_b = np.arccos(b)[None, :, :, None]
 
@@ -137,3 +140,13 @@ def test_similarity():
 
     plt.plot(xs[:, 0], g(xs))
     plt.plot(xs[:, 0], ghat)
+
+def run():
+    prob = random_problem(S=10)
+
+    root = source_tree(prob.sources, prob.charges)
+
+    ws = root.weights()
+
+    ax = plot(prob)
+    ax.scatter(*root.outof(root.nodes()).T, c=ws)
