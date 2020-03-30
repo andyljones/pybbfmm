@@ -31,48 +31,59 @@ def plot(prob, soln=None, q=.01):
 
     return ax
 
+KERNEL = quad_kernel
+TERMS = 20
+
+def chebyshev_nodes(lower, upper):
+    ms = np.arange(TERMS)
+    nodes = np.cos((2*ms+1)*np.pi/(2*TERMS))
+
+    mid = (upper + lower)/2
+    half = (upper - lower)/2
+    return half[None, :]*nodes[:, None] + mid
+
 class Node:
 
-    def __init__(self, parent, children, center):
-        self.parent = parent
+    def __init__(self, lims):
+        super().__init__()
+        self.lims = lims
+        self.nodes = chebyshev_nodes(lims[0], lims[1])
+
+class SourceNode(Node):
+
+    def __init__(self, children, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.children = children
-        self.center = center
 
-    def plot(self, ax=None):
-        ax = plt.subplots()[1] if ax is None else ax
-        if self.center is not None:
-            ax.scatter(*self.center)
+class SourceLeaf(Node):
 
-        for child in self.children.flatten():
-            child.plot(ax)
-
-class Leaf:
-
-    def __init__(self, parent, points):
-        self.parent = parent
+    def __init__(self, points, aux, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.points = points
+        self.aux = aux
 
-    def plot(self, ax):
-        ax.scatter(*self.points.T, marker='.')
+    def anterpolate(self):
+        pass
 
+def allocate(points, lims):
+    center = lims.mean(0)
+    criticals = np.stack([lims[0], center, lims[1]])
+    breakpoint()
+    sides = (points > center)
+    options = np.stack(list(product([False, True], repeat=points.ndim)))
+    for option in options:
+        mask = (sides == option).all(-1)
+        option = option.astype(int)
+        sublims = np.stack([criticals[option], criticals[option+1]])
 
-def tree(points, cutoff=5, parent=None):
+        yield (tuple(option), mask, sublims)
+
+def source_tree(points, charges, cutoff=5, lims=None):
+    lims = np.stack([points.min(0), points.max(0)]) if lims is None else lims
     if len(points) > cutoff:
-        center = points.min(0) + (points.max(0) - points.min(0))/2 
-
-        node = Node(
-            parent=parent, 
-            children=np.empty((2,)*points.ndim, dtype=object),
-            center=center)
-        
-        sides = (points > center)
-        options = np.stack(list(product([False, True], repeat=points.ndim)))
-        for option in options:
-            child = tree(points[(sides == option).all(-1)], cutoff, node)
-            node.children[tuple(option.astype(int))] = child
-        
+        children = np.empty((2,)*points.ndim, dtype=object)
+        for option, mask, sublims in allocate(points, lims):
+            children[option] = source_tree(points[mask], charges[mask], cutoff, sublims)
+        return SourceNode(children, lims)
     else:
-        node = Leaf(parent=parent, points=points)
-    
-    return node
-
+        return SourceLeaf(points, charges, lims)
