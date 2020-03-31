@@ -34,6 +34,12 @@ def plot(prob, soln=None, q=.01):
 KERNEL = quad_kernel
 N = 10 
 
+def cartesian_product(xs, D):
+    return np.stack(np.meshgrid(*([xs]*D)), -1)
+
+def flat_cartesian_product(xs, D):
+    return cartesian_product(xs, D).reshape(-1, D)
+
 def similarity(a, b):
     """
     Args:
@@ -54,7 +60,7 @@ def similarity(a, b):
     terms = np.cos(ks*theta_a)*np.cos(ks*theta_b)
     return (1/N + 2/N*terms.sum(-1)).prod(-1)
 
-def grids(root):
+def layer_grids(root):
     grids = [np.full([1]*root.dim(), root, dtype=object)]
     while True:
         blocks = np.vectorize(lambda v: v.pseudochildren())(grids[-1])
@@ -62,6 +68,38 @@ def grids(root):
         if np.vectorize(lambda v: isinstance(v, Leaf))(grids[-1]).all():
             break
     return grids
+
+def grid_neighbours(grid):
+    D = grid.flatten()[0].dim()
+
+    center = tuple([slice(1, -1)]*D)
+    embedded = np.full(np.array(grid.shape)+2, Null(D), dtype=grid.dtype)
+    embedded[center] = grid
+
+    offsets = flat_cartesian_product(np.array([-1, 0, +1]), 2)
+    offsets = offsets[~(offsets == (0, 0)).all(1)]
+    center_indices = np.stack(list(np.indices(grid.shape) + 1), -1)
+    neighbour_indices = center_indices[:, :, None, :] + offsets[None, None, :, :]
+    neighbours = embedded[tuple(neighbour_indices[..., d] for d in range(D))] 
+
+    return neighbours
+
+def expand_parents(parents, D):
+    W = parents.shape[0]
+    indices = cartesian_product(np.arange(0, W, .5).astype(int), D)
+    return parents[tuple(indices[..., d] for d in range(D))]
+
+def interaction_sets(children, parents):
+    D = children.flatten()[0].dim()
+    null = Null(D)
+
+    parents_neighbours = expand_parents(grid_neighbours(parents), D)
+    child_nephews = np.block(np.vectorize(lambda v: v.pseudochildren().flatten())(parents_neighbours).tolist())
+
+    child_neighbours = grid_neighbours(children)
+
+    mask = (child_nephews[:, :, :, None] != child_neighbours[:, :, None, :]).all(-1)
+    return np.where(mask, child_nephews, null)
 
 class Vertex:
 
@@ -88,7 +126,7 @@ class Vertex:
         D = self.dim()
         ms = np.arange(N)
         onedim = np.cos((ms+1/2)*np.pi/N)
-        return np.stack(np.meshgrid(*[onedim]*D), axis=-1).reshape(-1, D)
+        return flat_cartesian_product(onedim, D)
 
 class SourceInternal(Vertex):
 
@@ -104,7 +142,7 @@ class SourceInternal(Vertex):
 
     def pseudochildren(self):
         return self.children
-
+    
 class Leaf(Vertex):
 
     def __init__(self, points, *args, **kwargs):
@@ -137,6 +175,21 @@ class SourceLeaf(Vertex):
     def weights(self):
         S = similarity(self.nodes(), self.into(self.points))
         return (S*self.charges).sum(-1)
+
+class Null(Vertex):
+
+    def __init__(self, D):
+        super().__init__(lims=np.zeros((2, D)))
+
+    def pseudochildren(self):
+        return np.full((2,)*self.dim(), self)
+
+    def __eq__(self, other):
+        return isinstance(other, type(self))
+    
+    def __hash__(self):
+        return 0
+
 
 def allocate(points, lims):
     ds = np.arange(points.ndim)
