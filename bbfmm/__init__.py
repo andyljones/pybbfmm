@@ -54,11 +54,23 @@ def similarity(a, b):
     terms = np.cos(ks*theta_a)*np.cos(ks*theta_b)
     return (1/N + 2/N*terms.sum(-1)).prod(-1)
 
+def grids(root):
+    grids = [np.full([1]*root.dim(), root, dtype=object)]
+    while True:
+        blocks = np.vectorize(lambda v: v.pseudochildren())(grids[-1])
+        grids.append(np.block(blocks.tolist()))
+        if np.vectorize(lambda v: isinstance(v, Leaf))(grids[-1]).all():
+            break
+    return grids
+
 class Vertex:
 
     def __init__(self, lims):
         super().__init__()
         self.lims = lims
+    
+    def dim(self):
+        return self.lims.shape[-1]
 
     def center(self):
         return self.lims.mean(0)
@@ -73,7 +85,7 @@ class Vertex:
         return xs*self.scale() + self.center()
 
     def nodes(self):
-        D = self.lims.shape[-1]
+        D = self.dim()
         ms = np.arange(N)
         onedim = np.cos((ms+1/2)*np.pi/N)
         return np.stack(np.meshgrid(*[onedim]*D), axis=-1).reshape(-1, D)
@@ -85,7 +97,28 @@ class SourceInternal(Vertex):
         self.children = children
 
     def height(self):
+<<<<<<< HEAD
         return max(self.children)
+=======
+        return max(c.height() for c in self.children.flatten()) + 1
+
+    def pseudochildren(self):
+        return self.children
+
+class Leaf(Vertex):
+
+    def __init__(self, points, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.points = points
+
+    def height(self):
+        return 0
+
+    def pseudochildren(self):
+        return np.full((2,)*self.dim(), self)
+
+class SourceInternal(Internal):
+>>>>>>> fbab82c1... Adds grid generation
 
     def weights(self):
         total = 0
