@@ -35,7 +35,7 @@ KERNEL = quad_kernel
 N = 10 
 
 def cartesian_product(xs, D):
-    return np.stack(np.meshgrid(*([xs]*D)), -1)
+    return np.stack(np.meshgrid(*([xs]*D), indexing='ij'), -1)
 
 def flat_cartesian_product(xs, D):
     return cartesian_product(xs, D).reshape(-1, D)
@@ -78,7 +78,7 @@ def grid_neighbours(grid):
 
     offsets = flat_cartesian_product(np.array([-1, 0, +1]), 2)
     offsets = offsets[~(offsets == (0, 0)).all(1)]
-    center_indices = np.stack(list(np.indices(grid.shape) + 1), -1)
+    center_indices = np.stack(np.indices(grid.shape) + 1, -1)
     neighbour_indices = center_indices[:, :, None, :] + offsets[None, None, :, :]
     neighbours = embedded[tuple(neighbour_indices[..., d] for d in range(D))] 
 
@@ -89,7 +89,7 @@ def expand_parents(parents, D):
     indices = cartesian_product(np.arange(0, W, .5).astype(int), D)
     return parents[tuple(indices[..., d] for d in range(D))]
 
-def interaction_sets(children, parents):
+def interaction_sets(parents, children):
     D = children.flatten()[0].dim()
     null = Null(D)
 
