@@ -1,3 +1,10 @@
+"""
+TODO: 
+    * Generalize tree to cover both source and target nodes.
+        * Subject to initial limits, it's the same centers time. Target tree can just nab 
+    * Figure out interaction lists
+    * 
+"""
 import aljpy
 import numpy as np
 import matplotlib.pyplot as plt
@@ -33,6 +40,7 @@ def plot(prob, soln=None, q=.01):
 
 KERNEL = quad_kernel
 N = 10 
+EPS = 1e-2
 
 def cartesian_product(xs, D):
     return np.stack(np.meshgrid(*([xs]*D), indexing='ij'), -1)
@@ -48,7 +56,6 @@ def similarity(a, b):
     
     Returns:
         (m, j)
-
     """
     assert ((-1 <= a) & (a <= +1)).all()
     assert ((-1 <= b) & (b <= +1)).all()
@@ -128,7 +135,7 @@ class Vertex:
         onedim = np.cos((ms+1/2)*np.pi/N)
         return flat_cartesian_product(onedim, D)
 
-class SourceInternal(Vertex):
+class Internal(Vertex):
 
     def __init__(self, children, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -161,11 +168,10 @@ class SourceInternal(Internal):
             total += (similarity(self.nodes(), nodes)*child.weights()).sum(-1)
         return total
 
-class SourceLeaf(Vertex):
+class SourceLeaf(Leaf):
 
-    def __init__(self, points, charges, *args, **kwargs):
+    def __init__(self, charges, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.points = points
         self.charges = charges
 
     def weights(self):
@@ -202,14 +208,14 @@ def allocate(points, lims):
         yield (tuple(option), mask, sublims)
 
 def source_tree(points, charges, cutoff=5, lims=None):
-    lims = np.stack([points.min(0), points.max(0)]) if lims is None else lims
+    lims = np.stack([points.min(0) - EPS, points.max(0) + EPS]) if lims is None else lims
     if len(points) > cutoff:
         children = np.empty((2,)*points.ndim, dtype=object)
         for option, mask, sublims in allocate(points, lims):
             children[option] = source_tree(points[mask], charges[mask], cutoff, sublims)
         return SourceInternal(children, lims)
     else:
-        return SourceLeaf(points, charges, lims)
+        return SourceLeaf(charges, points, lims)
 
 
 def test_similarity():
