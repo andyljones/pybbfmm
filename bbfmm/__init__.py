@@ -135,9 +135,6 @@ class SourceInternal(Vertex):
         self.children = children
 
     def height(self):
-<<<<<<< HEAD
-        return max(self.children)
-=======
         return max(c.height() for c in self.children.flatten()) + 1
 
     def pseudochildren(self):
@@ -156,7 +153,6 @@ class Leaf(Vertex):
         return np.full((2,)*self.dim(), self)
 
 class SourceInternal(Internal):
->>>>>>> fbab82c1... Adds grid generation
 
     def weights(self):
         total = 0
