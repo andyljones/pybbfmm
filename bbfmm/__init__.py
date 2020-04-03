@@ -220,9 +220,8 @@ class Null(Vertex):
 def set_far_field(child, parent=None):
     g = np.zeros(N**child.dim())
     for ixn in child.interactions:
-        if not isinstance(ixn, Null):
-            K = KERNEL(child.outof(child.nodes())[:, None], ixn.outof(ixn.nodes())[None, :])
-            g += (K*ixn.W).sum(-1)
+        K = KERNEL(child.outof(child.nodes())[:, None], ixn.outof(ixn.nodes())[None, :])
+        g += (K*ixn.W).sum(-1)
 
     if parent is None:
         child.f = np.zeros(len(child.nodes()))
@@ -241,8 +240,8 @@ def subdivide(prob, lims):
     options = np.stack(list(product([False, True], repeat=len(ds))))
     for option in options:
         masks = aljpy.dotdict(
-            sources=((prob.sources > center) == option).all(-1),
-            targets=((prob.targets > center) == option).all(-1))
+            sources=((prob.sources >= center) == option).all(-1),
+            targets=((prob.targets >= center) == option).all(-1))
         option = option.astype(int)
         sublims = np.stack([boundaries[option, ds], boundaries[option+1, ds]])
         yield (tuple(option), masks, sublims)
@@ -271,14 +270,14 @@ def set_interactions(root):
     root.interactions = np.empty((0,), dtype=object)
     if isinstance(root, Leaf):
         root.neighbours = np.empty((0,), dtype=object)
-    for (parents, children) in zip(grids, grids[1:]):
+    for parents, children in zip(grids, grids[1:]):
         sets, neighbours = interaction_sets(parents, children)
         sets = sets.reshape(-1, sets.shape[-1])
         neighbours = neighbours.reshape(-1, neighbours.shape[-1])
         for c, s, n in zip(children.flatten(), sets, neighbours):
-            c.interactions = s[s != null]
+            c.interactions = np.array(list(set(s[s != null])))
             if isinstance(c, Leaf):
-                c.neighbours = n[n != null]
+                c.neighbours = np.array(list(set(n[n != null])))
 
 def test_similarity():
     lims = np.array([[-1], [+1]])
