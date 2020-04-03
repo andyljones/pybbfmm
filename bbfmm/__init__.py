@@ -67,6 +67,9 @@ def similarity(a, b):
     terms = np.cos(ks*theta_a)*np.cos(ks*theta_b)
     return (1/N + 2/N*terms.sum(-1)).prod(-1)
 
+def zero_weights(D):
+    return 
+
 def layer_grids(root):
     grids = [np.full([1]*root.dim(), root, dtype=object)]
     while True:
@@ -100,13 +103,16 @@ def interaction_sets(parents, children):
     D = children.flatten()[0].dim()
     null = Null(D)
 
-    parents_neighbours = expand_parents(grid_neighbours(parents), D)
+    parents_neighbours= expand_parents(grid_neighbours(parents), D)
     child_nephews = np.block(np.vectorize(lambda v: v.pseudochildren().flatten())(parents_neighbours).tolist())
 
     child_neighbours = grid_neighbours(children)
 
     mask = (child_nephews[:, :, :, None] != child_neighbours[:, :, None, :]).all(-1)
     return np.where(mask, child_nephews, null)
+
+def empty_interactions(D):
+    return np.full((3**D-1)*(2**D), Null(D))
 
 class Vertex:
 
@@ -161,22 +167,63 @@ class Leaf(Vertex):
 
 class SourceInternal(Internal):
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.W = np.zeros(N**self.dim())
+
     def weights(self):
         total = 0
         for child in self.children.flatten():
             nodes = self.into(child.outof(child.nodes()))
             total += (similarity(self.nodes(), nodes)*child.weights()).sum(-1)
-        return total
+        self.W = total
+        return self.W
 
 class SourceLeaf(Leaf):
 
     def __init__(self, charges, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.charges = charges
+        self.W = np.zeros(N**self.dim())
 
     def weights(self):
         S = similarity(self.nodes(), self.into(self.points))
-        return (S*self.charges).sum(-1)
+        self.W = (S*self.charges).sum(-1)
+        return self.W
+
+def assign_far_field(child, parent):
+    g = np.zeros(N**child.dim())
+    for ixn in child.interactions:
+        if not isinstance(ixn, Null):
+            K = KERNEL(child.outof(child.nodes())[:, None], ixn.outof(ixn.nodes())[None, :])
+            g += (K*ixn.W).sum(-1)
+
+    S = similarity(parent.into(child.outof(child.nodes())), parent.nodes())
+    child.f = g + (S*parent.f).sum(-1)
+
+class TargetInternal(Internal):
+
+    def __init__(self, weights, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.W = weights
+        self.interactions = empty_interactions(self.dim())
+        self.f = np.zeros(N**self.dim())
+
+    def far_field(self, parent):
+        assign_far_field(self, parent)
+        for child in self.children.flatten():
+            child.far_field(self)
+        
+class TargetLeaf(Leaf):
+
+    def __init__(self, weights, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.W = weights
+        self.interactions = empty_interactions(self.dim())
+
+    def far_field(self, parent):
+        assign_far_field(self, parent)
+
 
 class Null(Vertex):
 
@@ -202,21 +249,41 @@ def allocate(points, lims):
     for option in options:
         mask = (sides == option).all(-1)
         option = option.astype(int)
-        
         sublims = np.stack([criticals[option, ds], criticals[option+1, ds]])
-
         yield (tuple(option), mask, sublims)
 
-def source_tree(points, charges, cutoff=5, lims=None):
-    lims = np.stack([points.min(0) - EPS, points.max(0) + EPS]) if lims is None else lims
+def limits(sources, targets):
+    points = np.concatenate([sources, targets])
+    return np.stack([points.min(0) - EPS, points.max(0) + EPS])
+
+def source_tree(points, charges, lims, cutoff=5):
     if len(points) > cutoff:
         children = np.empty((2,)*points.ndim, dtype=object)
         for option, mask, sublims in allocate(points, lims):
-            children[option] = source_tree(points[mask], charges[mask], cutoff, sublims)
+            children[option] = source_tree(points[mask], charges[mask], sublims, cutoff)
         return SourceInternal(children, lims)
     else:
         return SourceLeaf(charges, points, lims)
 
+def target_tree(points, sources, lims, cutoff=5):
+    if len(points) > cutoff:
+        children = np.empty((2,)*points.ndim, dtype=object)
+        source_children = sources.pseudochildren()
+        for option, mask, sublims in allocate(points, lims):
+            children[option] = target_tree(points[mask], source_children[option], sublims, cutoff)
+        return TargetInternal(sources.W, children, lims)
+    else:
+        return TargetLeaf(sources.W, points, lims)
+
+
+def assign_interaction_lists(root):
+    grids = layer_grids(root)
+
+    root.interactions = np.full_like(grids[0], Null(root.dim()))
+    for (parents, children) in zip(grids, grids[1:]):
+        sets = interaction_sets(parents, children)
+        for c, s in zip(children.flatten(), sets.reshape(-1, sets.shape[-1])):
+            c.interactions = s
 
 def test_similarity():
     lims = np.array([[-1], [+1]])
@@ -233,11 +300,14 @@ def test_similarity():
     plt.plot(xs[:, 0], ghat)
 
 def run():
-    prob = random_problem(S=10)
+    prob = random_problem(S=100)
 
-    root = source_tree(prob.sources, prob.charges)
+    lims = limits(prob.sources, prob.targets)
+    stree = source_tree(prob.sources, prob.charges, lims)
+    stree.weights()
 
-    ws = root.weights()
+    ttree = target_tree(prob.targets, stree, lims)
+    assign_interaction_lists(ttree)
 
-    ax = plot(prob)
-    ax.scatter(*root.outof(root.nodes()).T, c=ws)
+    for child in ttree.children:
+        child.far_field(ttree)
