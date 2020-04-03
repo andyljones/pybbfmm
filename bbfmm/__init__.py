@@ -20,8 +20,8 @@ def random_problem(S=3, T=5, D=2):
         targets=np.random.uniform(-1., +1., (T, D)))
 
 def analytic_solution(prob, kernel=quad_kernel):
-    k = kernel(prob.sources[..., None, :, :], prob.targets[..., :, None, :])
-    return (prob.charges[..., None, :]*k).sum(-1)
+    k = kernel(prob.targets[:, None], prob.sources[None, :])
+    return (k*prob.charges).sum(-1)
 
 def plot(prob, soln=None, q=.01):
     fig, ax = plt.subplots()
@@ -73,10 +73,10 @@ def zero_weights(D):
 def layer_grids(root):
     grids = [np.full([1]*root.dim(), root, dtype=object)]
     while True:
-        blocks = np.vectorize(lambda v: v.pseudochildren())(grids[-1])
-        grids.append(np.block(blocks.tolist()))
         if np.vectorize(lambda v: isinstance(v, Leaf))(grids[-1]).all():
             break
+        blocks = np.vectorize(lambda v: v.pseudochildren())(grids[-1])
+        grids.append(np.block(blocks.tolist()))
     return grids
 
 def grid_neighbours(grid):
@@ -267,7 +267,9 @@ def set_interactions(root):
     grids = layer_grids(root)
 
     null = Null(root.dim())
-    root.interactions = np.empty((0,))
+    root.interactions = np.empty((0,), dtype=object)
+    if isinstance(root, Leaf):
+        root.neighbours = np.empty((0,), dtype=object)
     for (parents, children) in zip(grids, grids[1:]):
         sets, neighbours = interaction_sets(parents, children)
         sets = sets.reshape(-1, sets.shape[-1])
@@ -292,7 +294,6 @@ def test_similarity():
     plt.plot(xs[:, 0], ghat)
 
 def run():
-
     prob = random_problem(S=1, T=1)
 
     lims = limits(prob)
