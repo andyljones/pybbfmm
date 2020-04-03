@@ -1,45 +1,10 @@
-"""
-TODO: 
-    * Generalize tree to cover both source and target nodes.
-        * Subject to initial limits, it's the same centers time. Target tree can just nab 
-    * Figure out interaction lists
-    * 
-"""
 import aljpy
 import numpy as np
 import matplotlib.pyplot as plt
 from itertools import product
+from . import chebyshev, test
 
-def quad_kernel(a, b):
-    return 1/((a - b)**2).sum(-1)
-
-def random_problem(S=3, T=5, D=2):
-    return aljpy.dotdict(
-        sources=np.random.uniform(-1., +1., (S, D)),
-        charges=np.random.uniform(.1, 1., (S,)),
-        targets=np.random.uniform(-1., +1., (T, D)))
-
-def analytic_solution(prob, kernel=quad_kernel):
-    k = kernel(prob.targets[:, None], prob.sources[None, :])
-    return (k*prob.charges).sum(-1)
-
-def plot(prob, soln=None, q=.01):
-    fig, ax = plt.subplots()
-    if soln is None:
-        ax.scatter(*prob.targets.T, color='C0', label='targets', marker='.')
-    else:
-        lower, upper = np.quantile(soln, [q, 1-q]) 
-        soln = (soln - lower)/(upper - lower)
-        colors = plt.cm.viridis(soln)
-        ax.scatter(*prob.targets.T, color=colors, marker='.')
-
-    charges = (prob.charges - prob.charges.min())/(prob.charges.max() - prob.charges.min())
-    ax.scatter(*prob.sources.T, color='red', s=10 + 100*charges, label='sources', marker='x')
-
-    return ax
-
-KERNEL = quad_kernel
-N = 10 
+KERNEL = test.quad_kernel
 EPS = 1e-2
 
 def cartesian_product(xs, D):
@@ -47,28 +12,6 @@ def cartesian_product(xs, D):
 
 def flat_cartesian_product(xs, D):
     return cartesian_product(xs, D).reshape(-1, D)
-
-def similarity(a, b):
-    """
-    Args:
-        a: (m, d)
-        b: (j, d)
-    
-    Returns:
-        (m, j)
-    """
-    assert ((-1 <= a) & (a <= +1)).all()
-    assert ((-1 <= b) & (b <= +1)).all()
-
-    theta_a = np.arccos(a)[:, None, :, None]
-    theta_b = np.arccos(b)[None, :, :, None]
-
-    ks = np.arange(1, N)[None, None, None, :]
-    terms = np.cos(ks*theta_a)*np.cos(ks*theta_b)
-    return (1/N + 2/N*terms.sum(-1)).prod(-1)
-
-def zero_weights(D):
-    return 
 
 def layer_grids(root):
     grids = [np.full([1]*root.dim(), root, dtype=object)]
@@ -80,10 +23,11 @@ def layer_grids(root):
     return grids
 
 def grid_neighbours(grid):
-    D = grid.flatten()[0].dim()
+    cheb = grid.flatten()[0].cheb
+    D = cheb.D
 
     center = tuple([slice(1, -1)]*D)
-    embedded = np.full(np.array(grid.shape)+2, Null(D), dtype=grid.dtype)
+    embedded = np.full(np.array(grid.shape)+2, Null(cheb), dtype=grid.dtype)
     embedded[center] = grid
 
     offsets = flat_cartesian_product(np.array([-1, 0, +1]), D)
@@ -100,10 +44,10 @@ def expand_parents(parents, D):
     return parents[tuple(indices[..., d] for d in range(D))]
 
 def interaction_sets(parents, children):
-    D = children.flatten()[0].dim()
-    null = Null(D)
+    cheb = parents.flatten()[0].cheb
+    null = Null(cheb)
 
-    parents_neighbours= expand_parents(grid_neighbours(parents), D)
+    parents_neighbours= expand_parents(grid_neighbours(parents), cheb.D)
     child_nephews = np.block(np.vectorize(lambda v: v.pseudochildren().flatten())(parents_neighbours).tolist())
 
     child_neighbours = grid_neighbours(children)
@@ -113,9 +57,10 @@ def interaction_sets(parents, children):
 
 class Vertex:
 
-    def __init__(self, lims):
+    def __init__(self, lims, cheb):
         super().__init__()
         self.lims = lims
+        self.cheb = cheb
     
     def dim(self):
         return self.lims.shape[-1]
@@ -133,10 +78,7 @@ class Vertex:
         return xs*self.scale() + self.center()
 
     def nodes(self):
-        D = self.dim()
-        ms = np.arange(N)
-        onedim = np.cos((ms+1/2)*np.pi/N)
-        return flat_cartesian_product(onedim, D)
+        return self.cheb.nodes
 
     def __repr__(self):
         return f'{type(self).__name__}({str(hash(self))[-3:]})'
@@ -162,7 +104,7 @@ class Internal(Vertex):
         for child in self.children.flatten():
             child.set_weights()
             nodes = self.into(child.outof(child.nodes()))
-            total += (similarity(self.nodes(), nodes)*child.W).sum(-1)
+            total += self.cheb.anterpolate(nodes, child.W)
         self.W = total
 
     def set_far_field(self, parent=None):
@@ -191,15 +133,13 @@ class Leaf(Vertex):
         return np.full((2,)*self.dim(), self)
 
     def set_weights(self):
-        S = similarity(self.nodes(), self.into(self.sources))
-        self.W = (S*self.charges).sum(-1)
+        self.W = self.cheb.anterpolate(self.into(self.sources), self.charges)
 
     def set_far_field(self, parent=None):
         set_far_field(self, parent)
 
     def values(self):
-        S = similarity(self.into(self.targets), self.nodes())
-        V = (S*self.f).sum(-1)
+        V = self.cheb.interpolate(self.into(self.targets), self.f)
 
         # if len(self.targets) > 0 and self.targets[0, 0] == 1.:
         #     breakpoint()
@@ -213,8 +153,8 @@ class Leaf(Vertex):
 
 class Null(Vertex):
 
-    def __init__(self, D):
-        super().__init__(lims=np.zeros((2, D)))
+    def __init__(self, cheb):
+        super().__init__(np.zeros((2, cheb.D)), cheb)
 
     def pseudochildren(self):
         return np.full((2,)*self.dim(), self)
@@ -229,16 +169,15 @@ class Null(Vertex):
         return f'{type(self).__name__}(000)'
 
 def set_far_field(child, parent=None):
-    g = np.zeros(N**child.dim())
+    g = child.cheb.zeros() 
     for ixn in child.interactions:
         K = KERNEL(child.outof(child.nodes())[:, None], ixn.outof(ixn.nodes())[None, :])
         g += (K*ixn.W).sum(-1)
 
     if parent is None:
-        child.f = np.zeros(len(child.nodes()))
+        child.f = child.cheb.zeros()
     else:
-        S = similarity(parent.into(child.outof(child.nodes())), parent.nodes())
-        child.f = g + (S*parent.f).sum(-1)
+        child.f = g + parent.cheb.interpolate(parent.into(child.outof(child.nodes())), parent.f)
 
 def limits(prob):
     points = np.concatenate([prob.sources, prob.targets])
@@ -258,7 +197,6 @@ def subdivide(prob, lims):
         yield (tuple(option), masks, sublims)
 
 def required_depth(prob, lims, cutoff):
-    D = prob.sources.shape[-1]
     if (len(prob.sources) > cutoff) or (len(prob.targets) > cutoff):
         depth = []
         for option, submasks, sublims in subdivide(prob, lims):
@@ -271,10 +209,11 @@ def required_depth(prob, lims, cutoff):
         return 0
 
 
-def build_tree(prob, lims=None, cutoff=5, depth=None):
+def build_tree(prob, lims=None, cutoff=5, depth=None, cheb=None):
     D = prob.sources.shape[-1]
     lims = limits(prob) if lims is None else lims
     depth = required_depth(prob, lims, cutoff=cutoff) if depth is None else depth
+    cheb = chebyshev.Chebyshev(10, D) if cheb is None else cheb
     if depth > 0:
         children = np.empty((2,)*D, dtype=object)
         masks = np.empty((2,)*D, dtype=object)
@@ -284,15 +223,15 @@ def build_tree(prob, lims=None, cutoff=5, depth=None):
                 targets=prob.targets[submasks.targets],
                 charges=prob.charges[submasks.sources])
             masks[option] = submasks
-            children[option] = build_tree(subprob, sublims, cutoff, depth-1)
-        return Internal(children, masks, lims)
+            children[option] = build_tree(subprob, sublims, cutoff, depth-1, cheb)
+        return Internal(children, masks, lims, cheb)
     else:
-        return Leaf(prob, lims)
+        return Leaf(prob, lims, cheb)
 
 def set_interactions(root):
     grids = layer_grids(root)
 
-    null = Null(root.dim())
+    null = Null(root.cheb)
     root.interactions = np.empty((0,), dtype=object)
     if isinstance(root, Leaf):
         root.neighbours = np.empty((0,), dtype=object)
@@ -312,24 +251,11 @@ def solve(prob):
     root.set_far_field()
     return root.values()
 
-def test_similarity():
-    lims = np.array([[-1], [+1]])
-    v = Vertex(lims)
-
-    def g(x):
-        return (x**5).sum(-1)
-
-    ns = v.nodes()
-    xs = np.linspace(-1, +1, 101)[:, None]
-    ghat = (similarity(xs, ns)*g(ns)).sum(-1)
-
-    plt.plot(xs[:, 0], g(xs))
-    plt.plot(xs[:, 0], ghat)
 
 def run():
-    prob = random_problem(S=50, T=50, D=2)
+    prob = test.random_problem(S=50, T=50, D=2)
 
     vhat = solve(prob)
 
-    v = analytic_solution(prob)
+    v = test.solution(prob)
     np.around(vhat - v, 3)
