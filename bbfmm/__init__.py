@@ -144,7 +144,6 @@ class Vertex:
     def __str__(self):
         return repr(self)
 
-
 class Internal(Vertex):
 
     def __init__(self, children, masks, *args, **kwargs):
@@ -176,12 +175,6 @@ class Internal(Vertex):
         for child, mask in zip(self.children.flatten(), self.masks.flatten()):
             V[mask.targets] = child.values()
         return V
-
-    def print(self):
-        cs = '\n  '.join(c.print() for c in self.children.flatten())
-        return f'{str(self)}\n  {cs}'
-
-
          
 class Leaf(Vertex):
 
@@ -218,9 +211,6 @@ class Leaf(Vertex):
 
         return V
 
-    def print(self):
-        return str(self)
-        
 class Null(Vertex):
 
     def __init__(self, D):
@@ -315,6 +305,13 @@ def set_interactions(root):
             if isinstance(c, Leaf):
                 c.neighbours = np.array(list(set(n[(n != null) & (n != c)])))
 
+def solve(prob):
+    root = build_tree(prob)
+    root.set_weights()
+    set_interactions(root)
+    root.set_far_field()
+    return root.values()
+
 def test_similarity():
     lims = np.array([[-1], [+1]])
     v = Vertex(lims)
@@ -332,12 +329,7 @@ def test_similarity():
 def run():
     prob = random_problem(S=50, T=50, D=2)
 
-    root = build_tree(prob)
-    root.set_weights()
-    set_interactions(root)
-    root.set_far_field()
-    vhat = root.values()
+    vhat = solve(prob)
 
     v = analytic_solution(prob)
-    #plt.scatter(vhat, v)
     np.around(vhat - v, 3)
