@@ -109,10 +109,7 @@ def interaction_sets(parents, children):
     child_neighbours = grid_neighbours(children)
 
     mask = (child_nephews[:, :, :, None] != child_neighbours[:, :, None, :]).all(-1)
-    return np.where(mask, child_nephews, null)
-
-def empty_interactions(D):
-    return np.full((3**D-1)*(2**D), Null(D))
+    return np.where(mask, child_nephews, null), child_neighbours
 
 class Vertex:
 
@@ -206,7 +203,7 @@ class TargetInternal(Internal):
     def __init__(self, weights, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.W = weights
-        self.interactions = empty_interactions(self.dim())
+        self.interactions = None
         self.f = np.zeros(N**self.dim())
 
     def far_field(self, parent):
@@ -214,15 +211,29 @@ class TargetInternal(Internal):
         for child in self.children.flatten():
             child.far_field(self)
         
+    def near_field(self):
+        for child in self.children.flatten():
+            child.near_field()
+        
 class TargetLeaf(Leaf):
 
     def __init__(self, weights, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.W = weights
-        self.interactions = empty_interactions(self.dim())
+        self.interactions = None
+        self.neighbours = None
 
     def far_field(self, parent):
         assign_far_field(self, parent)
+
+    def near_field(self):
+        S = similarity(self.into(self.points), self.nodes())
+        f = (S*self.f).sum(-1)
+
+        for neighbour in self.neighbours.flatten():
+            f += KERNEL(self.points, neighbour.sources)*neighbour.charges
+
+
 
 
 class Null(Vertex):
@@ -281,9 +292,13 @@ def assign_interaction_lists(root):
 
     root.interactions = np.full_like(grids[0], Null(root.dim()))
     for (parents, children) in zip(grids, grids[1:]):
-        sets = interaction_sets(parents, children)
-        for c, s in zip(children.flatten(), sets.reshape(-1, sets.shape[-1])):
+        sets, neighbours = interaction_sets(parents, children)
+        sets = sets.reshape(-1, sets.shape[-1])
+        neighbours = neighbours.reshape(-1, neighbours.shape[-1])
+        for c, s in zip(children.flatten(), sets, neighbours):
             c.interactions = s
+            if isinstance(c, Leaf):
+                c.neighbours = neighbours
 
 def test_similarity():
     lims = np.array([[-1], [+1]])
