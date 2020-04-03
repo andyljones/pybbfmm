@@ -87,7 +87,7 @@ def grid_neighbours(grid):
     embedded[center] = grid
 
     offsets = flat_cartesian_product(np.array([-1, 0, +1]), D)
-    offsets = offsets[~(offsets == 0).any(1)]
+    offsets = offsets[~(offsets == 0).all(1)]
     center_indices = np.stack(np.indices(grid.shape) + 1, -1)
     neighbour_indices = center_indices[..., None, :] + offsets
     neighbours = embedded[tuple(neighbour_indices[..., d] for d in range(D))] 
@@ -138,6 +138,13 @@ class Vertex:
         onedim = np.cos((ms+1/2)*np.pi/N)
         return flat_cartesian_product(onedim, D)
 
+    def __repr__(self):
+        return f'{type(self).__name__}({str(hash(self))[-3:]})'
+
+    def __str__(self):
+        return repr(self)
+
+
 class Internal(Vertex):
 
     def __init__(self, children, masks, *args, **kwargs):
@@ -169,6 +176,11 @@ class Internal(Vertex):
         for child, mask in zip(self.children.flatten(), self.masks.flatten()):
             V[mask.targets] = child.values()
         return V
+
+    def print(self):
+        cs = '\n  '.join(c.print() for c in self.children.flatten())
+        return f'{str(self)}\n  {cs}'
+
 
          
 class Leaf(Vertex):
@@ -205,6 +217,9 @@ class Leaf(Vertex):
         V += (KERNEL(self.targets[:, None], self.sources[None, :])*self.charges).sum(-1)
 
         return V
+
+    def print(self):
+        return str(self)
         
 class Null(Vertex):
 
@@ -219,6 +234,9 @@ class Null(Vertex):
     
     def __hash__(self):
         return 0
+
+    def __repr__(self):
+        return f'{type(self).__name__}(000)'
 
 def set_far_field(child, parent=None):
     g = np.zeros(N**child.dim())
@@ -249,9 +267,8 @@ def subdivide(prob, lims):
         sublims = np.stack([boundaries[option, ds], boundaries[option+1, ds]])
         yield (tuple(option), masks, sublims)
 
-def required_depth(prob, lims=None, cutoff=5):
+def required_depth(prob, lims, cutoff):
     D = prob.sources.shape[-1]
-    lims = limits(prob) if lims is None else lims
     if (len(prob.sources) > cutoff) or (len(prob.targets) > cutoff):
         depth = []
         for option, submasks, sublims in subdivide(prob, lims):
@@ -266,8 +283,8 @@ def required_depth(prob, lims=None, cutoff=5):
 
 def build_tree(prob, lims=None, cutoff=5, depth=None):
     D = prob.sources.shape[-1]
-    depth = required_depth(prob, cutoff=cutoff) if depth is None else depth
     lims = limits(prob) if lims is None else lims
+    depth = required_depth(prob, lims, cutoff=cutoff) if depth is None else depth
     if depth > 0:
         children = np.empty((2,)*D, dtype=object)
         masks = np.empty((2,)*D, dtype=object)
@@ -313,7 +330,7 @@ def test_similarity():
     plt.plot(xs[:, 0], ghat)
 
 def run():
-    prob = random_problem(S=20, T=20, D=1)
+    prob = random_problem(S=50, T=50, D=2)
 
     root = build_tree(prob)
     root.set_weights()
@@ -322,5 +339,5 @@ def run():
     vhat = root.values()
 
     v = analytic_solution(prob)
-
-    v - vhat
+    #plt.scatter(vhat, v)
+    np.around(vhat - v, 3)
