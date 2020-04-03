@@ -140,9 +140,10 @@ class Vertex:
 
 class Internal(Vertex):
 
-    def __init__(self, children, *args, **kwargs):
+    def __init__(self, children, masks, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.children = children
+        self.masks = masks
 
     def height(self):
         return max(c.height() for c in self.children.flatten()) + 1
@@ -163,9 +164,12 @@ class Internal(Vertex):
         for child in self.children.flatten():
             child.set_far_field(self)
         
-    def set_near_field(self):
-        for child in self.children.flatten():
-            child.near_field()
+    def values(self):
+        V = np.zeros(len(self.masks[0, 0].targets))
+        for child, mask in zip(self.children.flatten(), self.masks.flatten()):
+            V[mask.targets] = child.values()
+        return V
+
          
 class Leaf(Vertex):
 
@@ -188,13 +192,17 @@ class Leaf(Vertex):
     def set_far_field(self, parent=None):
         set_far_field(self, parent)
 
-    def set_near_field(self):
+    def values(self):
         S = similarity(self.into(self.targets), self.nodes())
-        f = (S*self.f).sum(-1)
+        V = (S*self.f).sum(-1)
 
         for neighbour in self.neighbours.flatten():
-            f += KERNEL(self.targets, neighbour.sources)*neighbour.charges
+            V += (KERNEL(self.targets[:, None], neighbour.sources[None, :])*neighbour.charges).sum(-1)
+        
+        V += (KERNEL(self.targets[:, None], self.sources[None, :])*self.charges).sum(-1)
 
+        return V
+        
 class Null(Vertex):
 
     def __init__(self, D):
@@ -232,23 +240,26 @@ def subdivide(prob, lims):
     boundaries = np.stack([lims[0], center, lims[1]])
     options = np.stack(list(product([False, True], repeat=len(ds))))
     for option in options:
-        source_mask = ((prob.sources > center) == option).all(-1)
-        target_mask = ((prob.targets > center) == option).all(-1)
-        subprob = aljpy.dotdict(
-            sources=prob.sources[source_mask],
-            targets=prob.targets[target_mask],
-            charges=prob.charges[source_mask])
+        masks = aljpy.dotdict(
+            sources=((prob.sources > center) == option).all(-1),
+            targets=((prob.targets > center) == option).all(-1))
         option = option.astype(int)
         sublims = np.stack([boundaries[option, ds], boundaries[option+1, ds]])
-        yield (tuple(option), subprob, sublims)
+        yield (tuple(option), masks, sublims)
 
 def build_tree(prob, lims, cutoff=5):
     lims = limits(prob.sources, prob.targets) if lims is None else lims
     if (len(prob.sources) > cutoff) or (len(prob.targets) > cutoff):
         children = np.empty((2,)*prob.sources.ndim, dtype=object)
-        for option, subprob, sublims in subdivide(prob, lims):
+        masks = np.empty((2,)*prob.sources.ndim, dtype=object)
+        for option, submasks, sublims in subdivide(prob, lims):
+            subprob = aljpy.dotdict(
+                sources=prob.sources[submasks.sources],
+                targets=prob.targets[submasks.targets],
+                charges=prob.charges[submasks.sources])
+            masks[option] = submasks
             children[option] = build_tree(subprob, sublims, cutoff)
-        return Internal(children, lims)
+        return Internal(children, masks, lims)
     else:
         return Leaf(prob, lims)
 
@@ -281,10 +292,14 @@ def test_similarity():
     plt.plot(xs[:, 0], ghat)
 
 def run():
-    prob = random_problem(S=100, T=100)
+
+    prob = random_problem(S=1, T=1)
 
     lims = limits(prob)
     root = build_tree(prob, lims)
     root.set_weights()
     set_interactions(root)
     root.set_far_field()
+    v = root.values()
+
+    plt.scatter(analytic_solution(prob), v)
