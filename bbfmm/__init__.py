@@ -196,6 +196,9 @@ class Leaf(Vertex):
         S = similarity(self.into(self.targets), self.nodes())
         V = (S*self.f).sum(-1)
 
+        # if len(self.targets) > 0 and self.targets[0, 0] == 1.:
+        #     breakpoint()
+
         for neighbour in self.neighbours.flatten():
             V += (KERNEL(self.targets[:, None], neighbour.sources[None, :])*neighbour.charges).sum(-1)
         
@@ -246,10 +249,26 @@ def subdivide(prob, lims):
         sublims = np.stack([boundaries[option, ds], boundaries[option+1, ds]])
         yield (tuple(option), masks, sublims)
 
-def build_tree(prob, lims, cutoff=1):
+def required_depth(prob, lims=None, cutoff=5):
     D = prob.sources.shape[-1]
-    lims = limits(prob.sources, prob.targets) if lims is None else lims
+    lims = limits(prob) if lims is None else lims
     if (len(prob.sources) > cutoff) or (len(prob.targets) > cutoff):
+        depth = []
+        for option, submasks, sublims in subdivide(prob, lims):
+            subprob = aljpy.dotdict(
+                sources=prob.sources[submasks.sources],
+                targets=prob.targets[submasks.targets])
+            depth.append(required_depth(subprob, sublims, cutoff))
+        return max(depth) + 1
+    else:
+        return 0
+
+
+def build_tree(prob, lims=None, cutoff=5, depth=None):
+    D = prob.sources.shape[-1]
+    depth = required_depth(prob, cutoff=cutoff) if depth is None else depth
+    lims = limits(prob) if lims is None else lims
+    if depth > 0:
         children = np.empty((2,)*D, dtype=object)
         masks = np.empty((2,)*D, dtype=object)
         for option, submasks, sublims in subdivide(prob, lims):
@@ -258,7 +277,7 @@ def build_tree(prob, lims, cutoff=1):
                 targets=prob.targets[submasks.targets],
                 charges=prob.charges[submasks.sources])
             masks[option] = submasks
-            children[option] = build_tree(subprob, sublims, cutoff)
+            children[option] = build_tree(subprob, sublims, cutoff, depth-1)
         return Internal(children, masks, lims)
     else:
         return Leaf(prob, lims)
@@ -275,9 +294,9 @@ def set_interactions(root):
         sets = sets.reshape(-1, sets.shape[-1])
         neighbours = neighbours.reshape(-1, neighbours.shape[-1])
         for c, s, n in zip(children.flatten(), sets, neighbours):
-            c.interactions = np.array(list(set(s[s != null])))
+            c.interactions = np.array(list(set(s[(s != null) & (s != c)])))
             if isinstance(c, Leaf):
-                c.neighbours = np.array(list(set(n[n != null])))
+                c.neighbours = np.array(list(set(n[(n != null) & (n != c)])))
 
 def test_similarity():
     lims = np.array([[-1], [+1]])
@@ -294,13 +313,9 @@ def test_similarity():
     plt.plot(xs[:, 0], ghat)
 
 def run():
-    prob = aljpy.dotdict(
-        sources=np.array([.0])[:, None],
-        charges=np.array([1.]),
-        targets=np.array([1., +2.])[:, None])
+    prob = random_problem(S=20, T=20, D=1)
 
-    lims = limits(prob)
-    root = build_tree(prob, lims)
+    root = build_tree(prob)
     root.set_weights()
     set_interactions(root)
     root.set_far_field()
