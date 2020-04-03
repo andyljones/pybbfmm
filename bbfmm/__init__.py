@@ -86,10 +86,10 @@ def grid_neighbours(grid):
     embedded = np.full(np.array(grid.shape)+2, Null(D), dtype=grid.dtype)
     embedded[center] = grid
 
-    offsets = flat_cartesian_product(np.array([-1, 0, +1]), 2)
-    offsets = offsets[~(offsets == (0, 0)).all(1)]
+    offsets = flat_cartesian_product(np.array([-1, 0, +1]), D)
+    offsets = offsets[~(offsets == 0).any(1)]
     center_indices = np.stack(np.indices(grid.shape) + 1, -1)
-    neighbour_indices = center_indices[:, :, None, :] + offsets[None, None, :, :]
+    neighbour_indices = center_indices[..., None, :] + offsets
     neighbours = embedded[tuple(neighbour_indices[..., d] for d in range(D))] 
 
     return neighbours
@@ -108,7 +108,7 @@ def interaction_sets(parents, children):
 
     child_neighbours = grid_neighbours(children)
 
-    mask = (child_nephews[:, :, :, None] != child_neighbours[:, :, None, :]).all(-1)
+    mask = (child_nephews[..., :, None] != child_neighbours[..., None, :]).all(-1)
     return np.where(mask, child_nephews, null), child_neighbours
 
 class Vertex:
@@ -165,7 +165,7 @@ class Internal(Vertex):
             child.set_far_field(self)
         
     def values(self):
-        V = np.zeros(len(self.masks[0, 0].targets))
+        V = np.zeros(len(self.masks.flatten()[0].targets))
         for child, mask in zip(self.children.flatten(), self.masks.flatten()):
             V[mask.targets] = child.values()
         return V
@@ -235,7 +235,7 @@ def limits(prob):
     return np.stack([points.min(0) - EPS, points.max(0) + EPS])
 
 def subdivide(prob, lims):
-    ds = np.arange(prob.sources.ndim)
+    ds = np.arange(prob.sources.shape[-1])
     center = lims.mean(0)
     boundaries = np.stack([lims[0], center, lims[1]])
     options = np.stack(list(product([False, True], repeat=len(ds))))
@@ -247,11 +247,12 @@ def subdivide(prob, lims):
         sublims = np.stack([boundaries[option, ds], boundaries[option+1, ds]])
         yield (tuple(option), masks, sublims)
 
-def build_tree(prob, lims, cutoff=5):
+def build_tree(prob, lims, cutoff=1):
+    D = prob.sources.shape[-1]
     lims = limits(prob.sources, prob.targets) if lims is None else lims
     if (len(prob.sources) > cutoff) or (len(prob.targets) > cutoff):
-        children = np.empty((2,)*prob.sources.ndim, dtype=object)
-        masks = np.empty((2,)*prob.sources.ndim, dtype=object)
+        children = np.empty((2,)*D, dtype=object)
+        masks = np.empty((2,)*D, dtype=object)
         for option, submasks, sublims in subdivide(prob, lims):
             subprob = aljpy.dotdict(
                 sources=prob.sources[submasks.sources],
@@ -294,13 +295,18 @@ def test_similarity():
     plt.plot(xs[:, 0], ghat)
 
 def run():
-    prob = random_problem(S=1, T=1)
+    prob = aljpy.dotdict(
+        sources=np.array([.0])[:, None],
+        charges=np.array([1.]),
+        targets=np.array([1., +2.])[:, None])
 
     lims = limits(prob)
     root = build_tree(prob, lims)
     root.set_weights()
     set_interactions(root)
     root.set_far_field()
-    v = root.values()
+    vhat = root.values()
 
-    plt.scatter(analytic_solution(prob), v)
+    v = analytic_solution(prob)
+
+    v - vhat
