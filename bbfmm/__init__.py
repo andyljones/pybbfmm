@@ -12,24 +12,16 @@ class Grids:
         n = ((2**dim)**depth - 1)/((2**dim) - 1)
         self._storage = np.zeros((n, *tail), dtype=dtype)
 
+def cartesian_product(xs, D):
+    return np.stack(np.meshgrid(*([xs]*D), indexing='ij'), -1)
+
+def flat_cartesian_product(xs, D):
+    return cartesian_product(xs, D).reshape(-1, D)
+
 def limits(prob):
     points = np.concatenate([prob.sources, prob.targets])
     return np.stack([points.min(0) - EPS, points.max(0) + EPS])
 
-def required_depth(xs, cutoff, lims=None):
-    # Trick here is to map the limits to [0, 1], then bisect until the cutoffs are met
-    if xs.ndim > 1:
-        return max(required_depth(x, cutoff, l) for x, l in zip(xs.T, lims.T))
-    if lims is not None:
-        xs = (xs - lims[0])/(lims[1] - lims[0])
-
-    if len(xs) > cutoff:
-        return 1 + max(
-                required_depth(2*xs[xs < .5], cutoff), 
-                required_depth(2*xs[xs >= .5]-1, cutoff))
-    else:
-        return 0
-    
 def subdivide(prob, lims):
     ds = np.arange(prob.sources.shape[-1])
     center = lims.mean(0)
@@ -43,3 +35,10 @@ def subdivide(prob, lims):
         sublims = np.stack([boundaries[option, ds], boundaries[option+1, ds]])
         yield (tuple(option), masks, sublims)
 
+def make_grids(prob, cutoff):
+    lims = limits(prob)
+
+    while True:
+        finished = (len(prob.sources) <= cutoff) and (len(prob.targets) <= cutoff)
+        if finished:
+            pass
