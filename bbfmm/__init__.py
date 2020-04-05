@@ -43,3 +43,19 @@ def subdivide(xs, lims, cutoff=5):
             break
 
     return np.stack(paths, 1)
+
+def sublimits(lims, depth):
+    for d in range(depth):
+        center = lims.mean(-2)
+        lower = np.stack([lims[..., 0, :], center], -2)
+        upper = np.stack([center, lims[..., 1, :]], -2)
+        lims = np.stack([lower, upper], -3)
+    return lims
+
+
+def run():
+    prob = test.random_problem(S=4, D=1)
+
+    lims = limits(prob)
+
+    source_paths = subdivide(prob.sources, lims, cutoff=1)
