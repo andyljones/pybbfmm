@@ -11,14 +11,13 @@ def limits(prob):
     return np.stack([points.min(0) - EPS, points.max(0) + EPS])
 
 def occupancy(paths):
-    paths = np.stack(paths)
-
-    depth, _, D = paths.shape
-    bases = (2**D)**np.arange(depth-1, -1, -1)[:, None] * 2**np.arange(D-1, -1, -1)[None, :]
-    indices = (bases[:, None, :]*paths).sum(2).sum(0)
-
-    totals = np.zeros((2**D)**depth)
-    np.add.at(totals, indices, 1)
+    #TODO: numpy has a 32-dim limit hardcoded. So this might cause trouble
+    # if there's a 32-length path, which isn't beyond belief in a non-uniform
+    # input distribution
+    paths = np.stack(paths, 1) if isinstance(paths, list) else paths
+    _, depth, D = paths.shape
+    totals = np.zeros((2,)*(D*depth), dtype=int)
+    np.add.at(totals, tuple(paths.reshape(-1, D*depth).T), 1)
 
     return totals
 
@@ -43,4 +42,4 @@ def subdivide(xs, lims, cutoff=5):
         if occupancy(paths).max() <= cutoff:
             break
 
-    return np.stack(paths)
+    return np.stack(paths, 1)
