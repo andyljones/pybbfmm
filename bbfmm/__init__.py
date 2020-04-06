@@ -1,4 +1,4 @@
-import scipy as sp
+import scipy.signal
 import aljpy
 import numpy as np
 import matplotlib.pyplot as plt
@@ -82,7 +82,7 @@ def interactions(Ws, scaled):
     D = W.ndim-1
     width = W.shape[0]
 
-    child_offsets = chebyshev.cartesian_product([0, 1], D)[(...,)+(None,)*D+(slice(None))]
+    child_offsets = chebyshev.cartesian_product([0, 1], D)[(...,)+(None,)*D+(slice(None),)]
 
     nephew_offsets = child_offsets - chebyshev.cartesian_product(np.arange(-D, 2*D), D)[(None,)*D]
 
@@ -94,7 +94,8 @@ def interactions(Ws, scaled):
         interaction_kernel[..., None], 
         W[(None,)*D], 
         axes=np.arange(D, 2*D))
-    interactions = interactions[:, :, 2:-3, 2:-3].shape
+
+    interactions = interactions[(...,) + (slice(2, -3),)*D + (slice(None),)]
     
     return 
 
