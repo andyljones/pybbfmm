@@ -2,7 +2,7 @@ import scipy.signal
 import aljpy
 import numpy as np
 import matplotlib.pyplot as plt
-from . import test, chebyshev, tree, fftconvolve
+from . import test, chebyshev, tree
 from itertools import product
 
 KERNEL = test.quad_kernel
@@ -77,10 +77,10 @@ def weights(scaled, cheb, leaves):
     return list(reversed(Ws))
 
 def interactions(W, scaled, cheb):
-    # W = np.zeros((4, 1))
-    # W[0] = 1.
-    # scaled = aljpy.dotdict(limits=np.array([[0], [1]]))
-    # cheb = chebyshev.Chebyshev(1, 1)
+    if isinstance(W, list):
+        return [interactions(w, scaled, cheb) for w in W]
+    if W.shape[0] == 1:
+        return np.zeros_like(W)
 
     D, N = cheb.D, cheb.N
     width = W.shape[0]
@@ -107,19 +107,18 @@ def interactions(W, scaled, cheb):
 
     is_neighbour = (abs(nephew_offsets - child_offsets) <= 1).all(-1)
     interaction_kernel = np.where(is_neighbour, 0, nephew_kernel)
-    mirrored = interaction_kernel[(slice(None, None, -1),)*(2*D+1)]
+    mirrored = interaction_kernel[(slice(None, None, -1), slice(None))*D]
 
     W_dims = (width//2+2, 2)*D + (N**D,) + (1,)*D + (1,)
     Wp = np.pad(W, (((2, 2),)*D + ((0, 0),)))
     Wp = Wp.reshape(W_dims)
 
-    # Need to disable the valid-dims check in scipy.signal.fftconvolve
-    ixns = fftconvolve.fftconvolve(
+    ixns = scipy.signal.fftconvolve(
         Wp,
         mirrored,
         mode='valid',
-        axes=np.arange(2*D+1)
-    )
+        axes=np.arange(0, 2*D, 2)
+    ).sum(tuple(2*i+1 for i in range(D)) + (2*D,), keepdims=True)
 
     squeeze = tuple(2*d+1 for d in range(D)) + (2*D,)
     ixns = ixns.squeeze(squeeze)
@@ -140,7 +139,7 @@ def run():
     leaves = tree_leaves(scaled, cutoff=5)
 
     Ws = weights(scaled, cheb, leaves)
-    ixns = interactions(Ws[2], scaled, cheb)
+    ixns = interactions(Ws, scaled, cheb)
 
     # Validation
     root = tree.build_tree(prob)
@@ -149,3 +148,8 @@ def run():
     root.set_far_field()
 
     np.testing.assert_allclose(root.W, Ws[0][0, 0])
+
+    for i, j, k, l in chebyshev.flat_cartesian_product([0, 1], 4):
+        np.testing.assert_allclose(
+            root.children[i, j].children[k, l].f,
+            ixns[2*i+k, 2*j+l])
