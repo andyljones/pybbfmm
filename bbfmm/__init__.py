@@ -1,3 +1,4 @@
+import scipy as sp
 import aljpy
 import numpy as np
 import matplotlib.pyplot as plt
@@ -81,12 +82,21 @@ def interactions(Ws, scaled):
     D = W.ndim-1
     width = W.shape[0]
 
-    child_offsets = chebyshev.cartesian_product([0, 1], D)[..., None, :]
+    child_offsets = chebyshev.cartesian_product([0, 1], D)[(...,)+(None,)*D+(slice(None))]
 
-    nephew_offsets = child_offsets - chebyshev.flat_cartesian_product(np.arange(-D, 2*D), D)[(None,)*D]
+    nephew_offsets = child_offsets - chebyshev.cartesian_product(np.arange(-D, 2*D), D)[(None,)*D]
 
-    nephew_vector = scaled.limits[0] + (scaled.limits[1] - scaled.limits[0])*nephew_offsets/width
+    nephew_vector = (scaled.limits[1] - scaled.limits[0])*nephew_offsets/width
     nephew_kernel = KERNEL(np.zeros_like(nephew_vector), nephew_vector)
+
+    interaction_kernel = np.where((abs(nephew_offsets) > 1).any(-1), nephew_kernel, 0)
+    interactions = scipy.signal.fftconvolve(
+        interaction_kernel[..., None], 
+        W[(None,)*D], 
+        axes=np.arange(D, 2*D))
+    interactions = interactions[:, :, 2:-3, 2:-3].shape
+    
+    return 
 
 def run():
     prob = test.random_problem(S=100, T=100, D=2)
