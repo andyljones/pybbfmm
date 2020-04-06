@@ -76,28 +76,43 @@ def weights(scaled, cheb, leaves):
         Ws.append(np.tensordot(W_exp, coeffs, axes=dot_dims))
     return list(reversed(Ws))
 
-def interactions(Ws, scaled):
-    W = Ws[2]
+def interactions(Ws, scaled, cheb):
+    W = Ws[-1]
 
     D = W.ndim-1
     width = W.shape[0]
 
-    child_offsets = chebyshev.cartesian_product([0, 1], D)[(...,)+(None,)*D+(slice(None),)]
+    # (child offsets) x (child node) x (nephew offsets) x (nephew node) x (dim)
 
-    nephew_offsets = child_offsets - chebyshev.cartesian_product(np.arange(-D, 2*D), D)[(None,)*D]
+    child_dims = (2,)*D + (1,) + (1,)*D + (1,) + (D,)
+    child_offsets = chebyshev.cartesian_product([0, 1], D).reshape(child_dims)
 
-    nephew_vector = (scaled.limits[1] - scaled.limits[0])*nephew_offsets/width
-    nephew_kernel = KERNEL(np.zeros_like(nephew_vector), nephew_vector)
+    child_node_dims = (1,)*D + (cheb.N**D,) + (1,)*D + (1,) + (D,)
+    child_nodes = child_offsets + (cheb.nodes/2 + 1/2).reshape(child_node_dims)
 
-    interaction_kernel = np.where((abs(nephew_offsets) > 1).any(-1), nephew_kernel, 0)
+    nephew_dims = (1,)*D + (1,) + (6,)*D + (1,) + (D,)
+    nephew_offsets = chebyshev.cartesian_product(np.arange(-2, 4), D).reshape(nephew_dims)
+
+    nephew_node_dims = (1,)*D + (1,) + (1,)*D + (cheb.N**D,) + (D,)
+    nephew_nodes = nephew_offsets + (cheb.nodes/2 + 1/2).reshape(nephew_node_dims)
+
+    vectors = ((nephew_offsets + nephew_nodes) - (child_offsets + child_nodes))
+    vectors = (scaled.limits[1] - scaled.limits[0])/width*vectors
+
+    nephew_kernel = KERNEL(np.zeros_like(vectors), vectors)
+
+    is_neighbour = (abs(nephew_offsets - child_offsets) < 1).all(-1)
+    interaction_kernel = np.where(is_neighbour, 0, nephew_kernel)
+
     interactions = scipy.signal.fftconvolve(
-        interaction_kernel[..., None], 
-        W[(None,)*D], 
-        axes=np.arange(D, 2*D))
+        W[(None,)*(D+1)], 
+        interaction_kernel, 
+        axes=np.arange(D+1, 2*D+1))
 
-    interactions = interactions[(...,) + (slice(2, -3),)*D + (slice(None),)]
-    
-    return 
+    interactions = interactions.sum(-1)
+    interactions = interactions[(...,) + (slice(2, -3),)*D]
+
+    return interactions
 
 def run():
     prob = test.random_problem(S=100, T=100, D=2)
