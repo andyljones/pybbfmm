@@ -77,7 +77,7 @@ def weights(scaled, cheb, leaves):
     return list(reversed(Ws))
 
 def interactions(W, scaled, cheb):
-    D = W.ndim-1
+    D, N = cheb.D, cheb.N
     width = W.shape[0]
 
     # (nephew offsets) x (child offsets) x (child node) x (nephew node) x (dim)
@@ -85,34 +85,37 @@ def interactions(W, scaled, cheb):
     child_dims = (1,)*D + (2,)*D + (1, 1, D,)
     child_offsets = chebyshev.cartesian_product([0, 1], D).reshape(child_dims)
 
-    child_node_dims = (1,)*D + (1,)*D + (cheb.N**D, 1, D,)
-    child_nodes = child_offsets + (cheb.nodes/2 + 1/2).reshape(child_node_dims)
+    child_node_dims = (1,)*D + (1,)*D + (N**D, 1, D,)
+    child_nodes = (cheb.nodes/2 + 1/2).reshape(child_node_dims)
 
     nephew_dims = (6,)*D + (1,)*D + (1, 1, D,)
     nephew_offsets = chebyshev.cartesian_product(np.arange(-2, 4), D).reshape(nephew_dims)
 
-    nephew_node_dims = (1,)*D + (1,)*D + (1, cheb.N**D, D,)
-    nephew_nodes = nephew_offsets + (cheb.nodes/2 + 1/2).reshape(nephew_node_dims)
+    nephew_node_dims = (1,)*D + (1,)*D + (1, N**D, D,)
+    nephew_nodes = (cheb.nodes/2 + 1/2).reshape(nephew_node_dims)
 
     vectors = ((nephew_offsets + nephew_nodes) - (child_offsets + child_nodes))
     vectors = (scaled.limits[1] - scaled.limits[0])/width*vectors
 
     nephew_kernel = KERNEL(np.zeros_like(vectors), vectors)
 
-    is_neighbour = (abs(nephew_offsets - child_offsets) < 1).all(-1)
+    is_neighbour = (abs(nephew_offsets - child_offsets) <= 1).any(-1)
     interaction_kernel = np.where(is_neighbour, 0, nephew_kernel)
+    mirrored = interaction_kernel[(slice(None, None, -1),)*D]
 
     W_dims = (width,)*D + (1,)*D + (1, cheb.N**D)
     interactions = scipy.signal.fftconvolve(
+        mirrored, 
         W.reshape(W_dims), 
-        interaction_kernel, 
         axes=np.arange(D,))
 
     interactions = interactions.sum(-1)
     interactions = interactions[(slice(2, -3),)*D]
 
-    idxs = np.indices((width, width))
-    return interactions[tuple(idxs) + tuple(idxs % 2)]
+    #TODO: Fix these offsets
+    interactions = interactions[(slice(None),)*D + (0,)*D]
+
+    return interactions
 
 
 def run():
