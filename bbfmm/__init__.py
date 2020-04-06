@@ -10,27 +10,40 @@ def limits(prob):
     points = np.concatenate([prob.sources, prob.targets])
     return np.stack([points.min(0) - EPS, points.max(0) + EPS])
 
-def subdivide(xs, lims, cutoff=5):
-    scaled = (xs - lims[0])/(lims[1] - lims[0])
+def occupancy(paths, d, D):
+    occupancy = np.zeros((2**d,)*D)
+    np.add.at(occupancy, tuple(paths.T), 1)
+    return occupancy.max()
+
+def tree_indices(prob, lims, cutoff=5):
+    sources = (prob.sources - lims[0])/(lims[1] - lims[0])
+    targets = (prob.targets - lims[0])/(lims[1] - lims[0])
 
     D = lims.shape[1]
-    paths = np.zeros((len(xs), D), dtype=int)
+    si = np.zeros((len(sources), D), dtype=int)
+    ti = np.zeros((len(targets), D), dtype=int)
 
     #TODO: You can probably get very smart about this and just cast the xs
     # to ints and look at their binary representation.
-    for depth in range(32):
-        occupancy = np.zeros((2**depth,)*D)
-        np.add.at(occupancy, tuple(paths.T), 1)
-        if occupancy.max() <= cutoff:
+    for d in range(32):
+        s_done = occupancy(si, d, D) <= cutoff
+        t_done = occupancy(ti, d, D) <= cutoff
+        if s_done and t_done:
             break
 
-        boundaries = (1/2 + np.arange(2**depth))/2**depth
-        paths = 2*paths + (scaled >= boundaries[paths]).astype(int)
+        boundaries = (1/2 + np.arange(2**d))/2**d
+        si = 2*si + (sources >= boundaries[si]).astype(int)
+        ti = 2*ti + (targets >= boundaries[ti]).astype(int)
     else:
         raise ValueError('Paths seem very long')
 
-    return paths, depth
+    return aljpy.dotdict(
+        si=si, 
+        ti=ti, 
+        depth=d)
 
+def weights(prob, cheb, tree):
+    pass
 
 
 def run():
@@ -38,4 +51,4 @@ def run():
 
     lims = limits(prob)
 
-    source_paths = subdivide(prob.sources, lims, cutoff=1)
+    indices = tree_indices(prob, lims, cutoff=1)
