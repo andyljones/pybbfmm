@@ -61,6 +61,13 @@ def uplift_coeffs(cheb):
     S = cheb.similarity(cheb.nodes, children)
     return np.moveaxis(S, 0, -2)
 
+def pushdown_coeffs(cheb):
+    shifts = chebyshev.cartesian_product([-.5, +.5], cheb.D)
+    children = shifts[..., None, :] + cheb.nodes/2
+    S = cheb.similarity(children, cheb.nodes)
+    return S
+
+
 def weights(scaled, cheb, leaves):
     loc = scaled.sources * 2**leaves.depth - leaves.sources
     S = cheb.similarity(cheb.nodes, 2*loc-1)
@@ -74,11 +81,11 @@ def weights(scaled, cheb, leaves):
         exp_dims = sum([(s//2, 2) for s in Ws[-1].shape[:-1]], ())
         W_exp = Ws[-1].reshape(*exp_dims, -1)
         Ws.append(np.tensordot(W_exp, coeffs, axes=dot_dims))
-    return list(reversed(Ws))
+    return np.array(list(reversed(Ws)))
 
 def interactions(W, scaled, cheb):
-    if isinstance(W, list):
-        return [interactions(w, scaled, cheb) for w in W]
+    if W.dtype == object:
+        return np.array([interactions(w, scaled, cheb) for w in W])
     if W.shape[0] == 1:
         return np.zeros_like(W)
 
@@ -129,6 +136,25 @@ def interactions(W, scaled, cheb):
     ixns = ixns.reshape((width,)*D + (N**D,))
 
     return ixns
+
+def far_field(ixns, cheb):
+    N, D = cheb.N, cheb.D
+    fs = np.empty_like(ixns)
+    fs[0] = ixns[0]
+
+    dot_dims = (D, D+1)
+    coeffs = pushdown_coeffs(cheb)
+    for d in range(1, len(ixns)):
+        pushed = np.tensordot(fs[d-1], coeffs, dot_dims)
+        dims = sum([(i, D+i) for i in range(D)], ()) + (2*D,)
+        pushed = pushed.transpose(dims)
+
+        width = 2*fs[d-1].shape[0]
+        pushed = pushed.reshape((width,)*D + (N**D,))
+
+        fs[d] = pushed + ixns[d]
+    return fs
+
     
 def run():
     prob = test.random_problem(S=100, T=100, D=2)
@@ -140,6 +166,7 @@ def run():
 
     Ws = weights(scaled, cheb, leaves)
     ixns = interactions(Ws, scaled, cheb)
+    fs = far_field(ixns)
 
     # Validation
     root = tree.build_tree(prob)
@@ -152,4 +179,9 @@ def run():
     for i, j, k, l in chebyshev.flat_cartesian_product([0, 1], 4):
         np.testing.assert_allclose(
             root.children[i, j].children[k, l].f,
-            ixns[2*i+k, 2*j+l])
+            ixns[2][2*i+k, 2*j+l])
+
+        for m, n in chebyshev.flat_cartesian_product([0, 1], 2):
+            np.testing.assert_allclose(
+                root.children[i, j].children[k, l].children[m, n].f,
+                fs[3][4*i+2*k+m, 4*j+2*l+n])
