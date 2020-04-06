@@ -77,6 +77,11 @@ def weights(scaled, cheb, leaves):
     return list(reversed(Ws))
 
 def interactions(W, scaled, cheb):
+    # W = np.zeros((4, 1))
+    # W[0] = 1.
+    # scaled = aljpy.dotdict(limits=np.array([[0], [1]]))
+    # cheb = chebyshev.Chebyshev(1, 1)
+
     D, N = cheb.D, cheb.N
     width = W.shape[0]
 
@@ -102,7 +107,7 @@ def interactions(W, scaled, cheb):
 
     is_neighbour = (abs(nephew_offsets - child_offsets) <= 1).any(-1)
     interaction_kernel = np.where(is_neighbour, 0, nephew_kernel)
-    mirrored = interaction_kernel[(slice(None, None, -1),)*D]
+    mirrored = interaction_kernel[(slice(None, None, -1),)*(2*D)]
 
     W_dims = (width//2+2, 2)*D + (N**D,) + (1,)*D + (1,)
     Wp = np.pad(W, (((2, 2),)*D + ((0, 0),)))
@@ -122,11 +127,10 @@ def interactions(W, scaled, cheb):
     axes = sum([(i, D+i) for i in range(D)], ()) + (2*D,)
     ixns = ixns.transpose(axes)
 
-    ixns = ixns.reshape((width, width, N**D))
+    ixns = ixns.reshape((width,)*D + (N**D,))
 
     return ixns
-
-
+    
 def run():
     prob = test.random_problem(S=100, T=100, D=2)
 
