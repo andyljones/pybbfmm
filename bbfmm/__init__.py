@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from . import test, chebyshev, tree
 from itertools import product
 
+KERNEL = test.quad_kernel
 EPS = 1e-2
 
 def limits(prob):
@@ -74,6 +75,18 @@ def weights(scaled, cheb, leaves):
         Ws.append(np.tensordot(W_exp, coeffs, axes=dot_dims))
     return list(reversed(Ws))
 
+def interactions(Ws, scaled):
+    W = Ws[2]
+
+    D = W.ndim-1
+    width = W.shape[0]
+
+    child_offsets = chebyshev.cartesian_product([0, 1], D)[..., None, :]
+
+    nephew_offsets = child_offsets - chebyshev.flat_cartesian_product(np.arange(-D, 2*D), D)[(None,)*D]
+
+    nephew_vector = scaled.limits[0] + (scaled.limits[1] - scaled.limits[0])*nephew_offsets/width
+    nephew_kernel = KERNEL(np.zeros_like(nephew_vector), nephew_vector)
 
 def run():
     prob = test.random_problem(S=100, T=100, D=2)
@@ -83,7 +96,7 @@ def run():
     scaled = scale(prob)
     leaves = tree_leaves(scaled, cutoff=5)
 
-    W = weights(scaled, cheb, leaves)
+    Ws = weights(scaled, cheb, leaves)
 
 
     root = tree.build_tree(prob)
