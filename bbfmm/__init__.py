@@ -2,7 +2,7 @@ import scipy.signal
 import aljpy
 import numpy as np
 import matplotlib.pyplot as plt
-from . import test, chebyshev, tree
+from . import test, chebyshev, tree, fftconvolve
 from itertools import product
 
 KERNEL = test.quad_kernel
@@ -80,18 +80,19 @@ def interactions(W, scaled, cheb):
     D, N = cheb.D, cheb.N
     width = W.shape[0]
 
-    # (nephew offsets) x (child offsets) x (child node) x (nephew node) x (dim)
-    # (6,)*D + (2,)*D + (cheb.N**D, cheb.N**D, D,)
-    child_dims = (1,)*D + (2,)*D + (1, 1, D,)
+    # (nephew offset) + (nephew node) + (child offset) + (child node) + (D,) 
+    # (3, 2)*D + (N**D,) + (2,)*D + (N**D,) + (D,)
+
+    child_dims = (1, 1)*D + (1,) + (2,)*D + (1,) + (D,)
     child_offsets = chebyshev.cartesian_product([0, 1], D).reshape(child_dims)
 
-    child_node_dims = (1,)*D + (1,)*D + (N**D, 1, D,)
+    child_node_dims = (1, 1)*D + (1,) + (1,)*D + (N**D,) + (D,)
     child_nodes = (cheb.nodes/2 + 1/2).reshape(child_node_dims)
 
-    nephew_dims = (6,)*D + (1,)*D + (1, 1, D,)
+    nephew_dims = (3, 2)*D + (1,) + (1,)*D + (1,) + (D,)
     nephew_offsets = chebyshev.cartesian_product(np.arange(-2, 4), D).reshape(nephew_dims)
 
-    nephew_node_dims = (1,)*D + (1,)*D + (1, N**D, D,)
+    nephew_node_dims = (1, 1)*D + (N**D,) + (1,)*D + (1,) + (D,)
     nephew_nodes = (cheb.nodes/2 + 1/2).reshape(nephew_node_dims)
 
     vectors = ((nephew_offsets + nephew_nodes) - (child_offsets + child_nodes))
@@ -103,19 +104,27 @@ def interactions(W, scaled, cheb):
     interaction_kernel = np.where(is_neighbour, 0, nephew_kernel)
     mirrored = interaction_kernel[(slice(None, None, -1),)*D]
 
-    W_dims = (width,)*D + (1,)*D + (1, cheb.N**D)
-    interactions = scipy.signal.fftconvolve(
-        mirrored, 
-        W.reshape(W_dims), 
-        axes=np.arange(D,))
+    W_dims = (width//2+2, 2)*D + (N**D,) + (1,)*D + (1,)
+    Wp = np.pad(W, (((2, 2),)*D + ((0, 0),)))
+    Wp = Wp.reshape(W_dims)
 
-    interactions = interactions.sum(-1)
-    interactions = interactions[(slice(2, -3),)*D]
+    # Need to disable the valid-dims check in scipy.signal.fftconvolve
+    ixns = fftconvolve.fftconvolve(
+        Wp,
+        mirrored,
+        mode='valid',
+        axes=np.arange(2*D+1)
+    )
 
-    #TODO: Fix these offsets
-    interactions = interactions[(slice(None),)*D + (0,)*D]
+    squeeze = tuple(2*d+1 for d in range(D)) + (2*D,)
+    ixns = ixns.squeeze(squeeze)
 
-    return interactions
+    axes = sum([(i, D+i) for i in range(D)], ()) + (2*D,)
+    ixns = ixns.transpose(axes)
+
+    ixns = ixns.reshape((width, width, N**D))
+
+    return ixns
 
 
 def run():
