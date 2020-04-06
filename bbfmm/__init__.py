@@ -107,7 +107,7 @@ def interactions(W, scaled, cheb):
 
     is_neighbour = (abs(nephew_offsets - child_offsets) <= 1).any(-1)
     interaction_kernel = np.where(is_neighbour, 0, nephew_kernel)
-    mirrored = interaction_kernel[(slice(None, None, -1),)*(2*D)]
+    mirrored = interaction_kernel[(slice(None, None, -1),)*(2*D+1)]
 
     W_dims = (width//2+2, 2)*D + (N**D,) + (1,)*D + (1,)
     Wp = np.pad(W, (((2, 2),)*D + ((0, 0),)))
