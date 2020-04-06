@@ -1,7 +1,7 @@
 import aljpy
 import numpy as np
 import matplotlib.pyplot as plt
-from . import test, chebyshev
+from . import test, chebyshev, tree
 from itertools import product
 
 EPS = 1e-2
@@ -10,45 +10,83 @@ def limits(prob):
     points = np.concatenate([prob.sources, prob.targets])
     return np.stack([points.min(0) - EPS, points.max(0) + EPS])
 
-def occupancy(paths, d, D):
-    occupancy = np.zeros((2**d,)*D)
-    np.add.at(occupancy, tuple(paths.T), 1)
-    return occupancy.max()
+def scale(prob):
+    lims = limits(prob)
+    return aljpy.dotdict(
+        limits=lims,
+        sources=(prob.sources - lims[0])/(lims[1] - lims[0]),
+        charges=prob.charges,
+        targets=(prob.targets - lims[0])/(lims[1] - lims[0]))
 
-def tree_indices(prob, lims, cutoff=5):
-    sources = (prob.sources - lims[0])/(lims[1] - lims[0])
-    targets = (prob.targets - lims[0])/(lims[1] - lims[0])
+def leaf_sum(l, x, d):
+    x = np.asarray(x)
+    D = l.shape[1]
+    totals = np.zeros((2**d,)*D + x.shape[1:])
+    np.add.at(totals, tuple(l.T), x)
+    return totals
 
-    D = lims.shape[1]
-    si = np.zeros((len(sources), D), dtype=int)
-    ti = np.zeros((len(targets), D), dtype=int)
+def leaf_centers(d):
+    return (1/2 + np.arange(2**d))/2**d
 
-    #TODO: You can probably get very smart about this and just cast the xs
+def tree_leaves(scaled, cutoff=5):
+    D = scaled.sources.shape[1]
+    sl = np.zeros((len(scaled.sources), D), dtype=int)
+    tl = np.zeros((len(scaled.targets), D), dtype=int)
+
+    #TODO: You can probably get very smart about this and just convert the xs
     # to ints and look at their binary representation.
-    for d in range(32):
-        s_done = occupancy(si, d, D) <= cutoff
-        t_done = occupancy(ti, d, D) <= cutoff
+    d = 0
+    while True:
+        s_done = leaf_sum(sl, 1, d).max() <= cutoff
+        t_done = leaf_sum(tl, 1, d).max() <= cutoff
         if s_done and t_done:
             break
 
-        boundaries = (1/2 + np.arange(2**d))/2**d
-        si = 2*si + (sources >= boundaries[si]).astype(int)
-        ti = 2*ti + (targets >= boundaries[ti]).astype(int)
-    else:
-        raise ValueError('Paths seem very long')
+        centers = leaf_centers(d)
+        sl = 2*sl + (scaled.sources >= centers[sl]).astype(int)
+        tl = 2*tl + (scaled.targets >= centers[tl]).astype(int)
+
+        d += 1
 
     return aljpy.dotdict(
-        si=si, 
-        ti=ti, 
+        sources=sl, 
+        targets=tl, 
         depth=d)
 
-def weights(prob, cheb, tree):
-    pass
+def uplift_coeffs(cheb):
+    shifts = chebyshev.cartesian_product([-.5, +.5], cheb.D)
+    children = shifts[..., None, :] + cheb.nodes/2
+    S = cheb.similarity(cheb.nodes, children)
+    return np.moveaxis(S, 0, -2)
+
+def weights(scaled, cheb, leaves):
+    loc = scaled.sources * 2**leaves.depth - leaves.sources
+    S = cheb.similarity(cheb.nodes, 2*loc-1)
+    Ws = [leaf_sum(leaves.sources, (S*scaled.charges).T, leaves.depth)]
+
+    coeffs = uplift_coeffs(cheb)
+    dot_dims = (
+        list(range(1, 2*cheb.D, 2)) + [-1],
+        list(range(cheb.D)) + [-1])
+    for d in reversed(range(leaves.depth)):
+        exp_dims = sum([(s//2, 2) for s in Ws[-1].shape[:-1]], ())
+        W_exp = Ws[-1].reshape(*exp_dims, -1)
+        Ws.append(np.tensordot(W_exp, coeffs, axes=dot_dims))
+    return list(reversed(Ws))
 
 
 def run():
-    prob = test.random_problem(S=4, D=1)
+    prob = test.random_problem(S=100, T=100, D=2)
 
-    lims = limits(prob)
+    cheb = chebyshev.Chebyshev(10, prob.sources.shape[1])
 
-    indices = tree_indices(prob, lims, cutoff=1)
+    scaled = scale(prob)
+    leaves = tree_leaves(scaled, cutoff=5)
+
+    W = weights(scaled, cheb, leaves)
+
+
+    root = tree.build_tree(prob)
+    root.set_weights()
+
+    np.testing.assert_allclose(root.W, W[0][0, 0])

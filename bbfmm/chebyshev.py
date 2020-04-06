@@ -1,6 +1,12 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+def cartesian_product(xs, D):
+    return np.stack(np.meshgrid(*((xs,)*D), indexing='ij'), -1)
+
+def flat_cartesian_product(xs, D):
+    return cartesian_product(xs, D).reshape(-1, D)
+
 class Chebyshev:
     
     def __init__(self, N, D):
@@ -13,14 +19,13 @@ class Chebyshev:
         if self._nodes is None:
             ms = np.arange(self.N)
             onedim = np.cos((ms+1/2)*np.pi/self.N)
-            multidim = np.stack(np.meshgrid(*([onedim]*self.D), indexing='ij'), -1)
-            self._nodes = multidim.reshape(-1, self.D)
+            self._nodes = flat_cartesian_product(onedim, self.D)
         return self._nodes
 
     def zeros(self):
         return np.zeros(self.N**self.D)
 
-    def _similarity(self, a, b):
+    def similarity(self, a, b):
         """
         Args:
             a: (m, d)
@@ -32,18 +37,21 @@ class Chebyshev:
         assert ((-1 <= a) & (a <= +1)).all()
         assert ((-1 <= b) & (b <= +1)).all()
 
-        theta_a = np.arccos(a)[:, None, :, None]
-        theta_b = np.arccos(b)[None, :, :, None]
+        da = a.shape[:-1] + (1,)*(b.ndim-1) + (self.D, 1)
+        db = (1,)*(a.ndim-1) + b.shape[:-1] + (self.D, 1)
+
+        theta_a = np.arccos(a).reshape(da)
+        theta_b = np.arccos(b).reshape(db)
 
         ks = np.arange(1, self.N)[None, None, None, :]
         terms = np.cos(ks*theta_a)*np.cos(ks*theta_b)
         return (1/self.N + 2/self.N*terms.sum(-1)).prod(-1)
 
     def interpolate(self, x, v):
-        return (self._similarity(x, self.nodes)*v).sum(-1)
+        return (self.similarity(x, self.nodes)*v).sum(-1)
 
     def anterpolate(self, x, v):
-        return (self._similarity(self.nodes, x)*v).sum(-1)
+        return (self.similarity(self.nodes, x)*v).sum(-1)
 
 def test_similarity():
 

@@ -7,12 +7,6 @@ from . import chebyshev, test
 KERNEL = test.quad_kernel
 EPS = 1e-2
 
-def cartesian_product(xs, D):
-    return np.stack(np.meshgrid(*([xs]*D), indexing='ij'), -1)
-
-def flat_cartesian_product(xs, D):
-    return cartesian_product(xs, D).reshape(-1, D)
-
 def layer_grids(root):
     grids = [np.full([1]*root.dim(), root, dtype=object)]
     while True:
@@ -30,7 +24,7 @@ def grid_neighbours(grid):
     embedded = np.full(np.array(grid.shape)+2, Null(cheb), dtype=grid.dtype)
     embedded[center] = grid
 
-    offsets = flat_cartesian_product(np.array([-1, 0, +1]), D)
+    offsets = chebyshev.flat_cartesian_product(np.array([-1, 0, +1]), D)
     offsets = offsets[~(offsets == 0).all(1)]
     center_indices = np.stack(np.indices(grid.shape) + 1, -1)
     neighbour_indices = center_indices[..., None, :] + offsets
@@ -40,7 +34,7 @@ def grid_neighbours(grid):
 
 def expand_parents(parents, D):
     W = parents.shape[0]
-    indices = cartesian_product(np.arange(0, W, .5).astype(int), D)
+    indices = chebyshev.cartesian_product(np.arange(0, W, .5).astype(int), D)
     return parents[tuple(indices[..., d] for d in range(D))]
 
 def interaction_sets(parents, children):
