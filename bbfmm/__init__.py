@@ -105,7 +105,7 @@ def interactions(W, scaled, cheb):
 
     nephew_kernel = KERNEL(np.zeros_like(vectors), vectors)
 
-    is_neighbour = (abs(nephew_offsets - child_offsets) <= 1).any(-1)
+    is_neighbour = (abs(nephew_offsets - child_offsets) <= 1).all(-1)
     interaction_kernel = np.where(is_neighbour, 0, nephew_kernel)
     mirrored = interaction_kernel[(slice(None, None, -1),)*(2*D+1)]
 
