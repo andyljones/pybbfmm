@@ -179,12 +179,22 @@ def group(leaves, depth, cutoff):
 
 
 def values(fs, scaled, leaves, cheb, cutoff):
-    S = cheb.similarity(cheb.nodes, scaled.targets)
+    loc = scaled.targets * 2**leaves.depth - leaves.targets
+    S = cheb.similarity(loc, cheb.nodes)
     f = (S*fs[-1][tuple(leaves.targets.T)]).sum(-1)
 
     groups = aljpy.dotdict(
         sources=group(leaves.sources, leaves.depth, cutoff),
         targets=group(leaves.targets, leaves.depth, cutoff))
+
+    scale = scaled.limits[1] - scaled.limits[0]
+    sources, targets = scale*scaled.sources, scale*scaled.targets
+    K = KERNEL(targets[groups.targets][..., :, None, :], sources[groups.sources][..., None, :, :])
+    charges = scaled.charges[groups.sources]*(groups.sources > -1)
+    f_self = (K*charges[..., None, :]).sum(-1)
+
+    f[groups.targets[groups.targets > -1]] += f_self[groups.targets > -1]
+
     
 def run():
     prob = test.random_problem(S=100, T=100, D=2)
@@ -196,7 +206,7 @@ def run():
 
     Ws = weights(scaled, cheb, leaves)
     ixns = interactions(Ws, scaled, cheb)
-    fs = far_field(ixns)
+    fs = far_field(ixns, cheb)
 
     # Validation
     root = tree.build_tree(prob)
