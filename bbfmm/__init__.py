@@ -209,13 +209,9 @@ def values(fs, scaled, leaves, cheb, cutoff):
     
     return f
 
-    
-def run():
-    prob = test.random_problem(S=100, T=100, D=2)
-
+def solve(prob, cutoff=5):
     cheb = chebyshev.Chebyshev(10, prob.sources.shape[1])
 
-    cutoff = 5
     scaled = scale(prob)
     leaves = tree_leaves(scaled)
 
@@ -224,26 +220,12 @@ def run():
     fs = far_field(ixns, cheb)
     v = values(fs, scaled, leaves, cheb, cutoff)
 
-    np.testing.assert_allclose(v, test.solution(prob))
+    return v
 
-    # Validation
-    root = tree.build_tree(prob, cheb=cheb)
-    root.set_weights()
-    tree.set_interactions(root)
-    root.set_far_field()
-    v_ref = root.values()
-
-    np.testing.assert_allclose(root.W, Ws[0][0, 0])
-
-    for i, j, k, l in chebyshev.flat_cartesian_product([0, 1], 4):
-        np.testing.assert_allclose(
-            root.children[i, j].children[k, l].f,
-            ixns[2][2*i+k, 2*j+l])
-
-        for m, n in chebyshev.flat_cartesian_product([0, 1], 2):
-            np.testing.assert_allclose(
-                root.children[i, j].children[k, l].children[m, n].f,
-                fs[3][4*i+2*k+m, 4*j+2*l+n])
     
-    np.testing.assert_allclose(v_ref, v)
+def run():
+    prob = test.random_problem(S=100, T=100, D=2)
 
+    v = solve(prob)
+
+    np.testing.assert_allclose(v, test.solution(prob))
