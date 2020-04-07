@@ -233,16 +233,21 @@ def run():
 
     np.testing.assert_allclose(v, test.solve(prob))
 
-def benchmark():
+def benchmark(maxsize=30e3, repeats=5):
     import pandas as pd
 
     result = {}
-    for N in np.logspace(1, np.log10(3e4), 50, dtype=int):
+    for N in np.logspace(1, np.log10(maxsize), 50, dtype=int):
         print(f'Timing {N}')
-        prob = test.random_problem(S=N, T=N, D=2)
-        with aljpy.timer() as bbfmm:
-            solve(prob, N=5)
-        with aljpy.timer() as analytic:
-            test.solve(prob)
-        result[N] = {'bbfmm': bbfmm.time(), 'analytic': analytic.time()}
+        for r in range(repeats):
+            prob = test.random_problem(S=N, T=N, D=2)
+            with aljpy.timer() as bbfmm:
+                solve(prob, N=5)
+            with aljpy.timer() as analytic:
+                test.solve(prob)
+            result[N, r] = {'bbfmm': bbfmm.time(), 'analytic': analytic.time()}
     result = pd.DataFrame.from_dict(result, orient='index')
+
+    result.groupby(level=0).mean().plot(loglog=True)
+
+    return result
