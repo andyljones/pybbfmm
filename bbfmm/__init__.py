@@ -146,7 +146,8 @@ def interactions(W, scaled, cheb):
     ixns = np.zeros_like(Wpc)
     for offset, fst, snd in offset_slices(width//2, D):
         node_vecs, pos_vecs = nephew_vectors(offset, cheb)
-        K = KERNEL(np.zeros_like(node_vecs), scaled.scale*node_vecs/width)
+        with np.errstate(divide='ignore'):
+            K = KERNEL(np.zeros_like(node_vecs), scaled.scale*node_vecs/width)
         K = np.where((abs(pos_vecs) <= 1).all(-1), 0, K)
         ixns[snd] += np.tensordot(Wpc[fst], K, dot_dims)
     ixns = independent_format(ixns, D)
@@ -189,6 +190,20 @@ def group(leaves, depth, cutoff):
     indices = _group(linear, depth, D, cutoff)
     return indices.reshape((2**depth,)*D + (cutoff,))
 
+@numba.jit(nopython=True)
+def _neighbours(source_idxs, target_idxs):
+    N = ((source_idxs != -1).sum(-1)*(target_idxs != -1).sum(-1)).sum()
+    n = 0
+    pairs = np.full((N, 2), -1)
+    for i in range(source_idxs.shape[0]):
+        for j in range(source_idxs.shape[1]):
+            if source_idxs[i, j] > -1:
+                for k in range(target_idxs.shape[1]):
+                    if target_idxs[i, k] > -1:
+                        pairs[n] = (source_idxs[i, j], target_idxs[i, k])
+                        n += 1
+    return pairs
+
 def neighbours(groups):
     width = groups.sources.shape[0]
     cutoff = groups.sources.shape[-1]
@@ -199,33 +214,30 @@ def neighbours(groups):
         neighbours[snd + offset] = groups.sources[fst]
     source_idxs = neighbours.reshape(width*width, 3**D*cutoff)
     target_idxs = groups.targets.reshape(width*width, cutoff)
-    
-def values(fs, scaled, leaves, cheb, cutoff):
-    loc = scaled.targets * 2**leaves.depth - leaves.targets
-    S = cheb.similarity(2*loc-1, cheb.nodes)
-    f = (S*fs[-1][tuple(leaves.targets.T)]).sum(-1)
+    return _neighbours(source_idxs, target_idxs)
+
+def near_field(scaled, leaves, cutoff):
+    sources, targets = scaled.scale*scaled.sources, scaled.scale*scaled.targets
 
     groups = aljpy.dotdict(
         sources=group(leaves.sources, leaves.depth, cutoff),
         targets=group(leaves.targets, leaves.depth, cutoff))
+    source_idxs, target_idxs = neighbours(groups).T 
 
-    sources, targets = scaled.scale*scaled.sources, scaled.scale*scaled.targets
-    for _, fst, snd in offset_slices(2**leaves.depth, cheb.D):
-        source_group, target_group = groups.sources[fst], groups.targets[snd]
+    with np.errstate(divide='ignore'):
+        K = KERNEL(sources[source_idxs], targets[target_idxs])
 
-        # Bit of a hack to keep the amount of empty cells being evaluated down
-        mask = (source_group > -1).any(-1) | (target_group > -1).any(-1)
-        source_group, target_group = source_group[mask], target_group[mask]
+    totals = np.zeros(len(targets))
+    np.add.at(totals, target_idxs, K*scaled.charges[source_idxs])
 
-        K = KERNEL(
-            targets[target_group][..., :, None, :], 
-            sources[source_group][..., None, :, :])
-        charges = scaled.charges[source_group]*(source_group > -1)
-        f_group = (K*charges[..., None, :]).sum(-1)
+    return totals
 
-        f[target_group[target_group > -1]] += f_group[target_group > -1]
+def values(fs, scaled, leaves, cheb, cutoff):
+    loc = scaled.targets * 2**leaves.depth - leaves.targets
+    S = cheb.similarity(2*loc-1, cheb.nodes)
+    f = (S*fs[-1][tuple(leaves.targets.T)]).sum(-1)
     
-    return f
+    return f + near_field(scaled, leaves, cutoff)
 
 def solve(prob, N=5, cutoff=5):
     cheb = chebyshev.Chebyshev(N, prob.sources.shape[1])
@@ -239,7 +251,6 @@ def solve(prob, N=5, cutoff=5):
     v = values(fs, scaled, leaves, cheb, cutoff)
 
     return v
-
     
 def run():
     prob = test.random_problem(S=100, T=100, D=2)
