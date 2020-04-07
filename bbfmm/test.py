@@ -11,7 +11,7 @@ def random_problem(S=3, T=5, D=2):
         charges=np.random.uniform(.1, 1., (S,)),
         targets=np.random.uniform(-1., +1., (T, D)))
 
-def solution(prob, kernel=quad_kernel):
+def solve(prob, kernel=quad_kernel):
     k = kernel(prob.targets[:, None], prob.sources[None, :])
     return (k*prob.charges).sum(-1)
 

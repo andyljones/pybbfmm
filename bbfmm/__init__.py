@@ -127,11 +127,6 @@ def nephew_vectors(offset, cheb):
     return node_vectors, pos_vectors
 
 def interactions(W, scaled, cheb):
-    """
-    Input: (parent index)*D x (child offset)*D x (child node)
-    Output: (parent index)*D x (child offset)*D x (child node)
-    Kernel: [(neighbour offset)*D] x (child offset)*D x (child_node) x (nephew offset)*D x (nephew node)
-    """
     if W.dtype == object:
         return np.array([interactions(w, scaled, cheb) for w in W])
     if W.shape[0] == 1:
@@ -144,6 +139,9 @@ def interactions(W, scaled, cheb):
         np.arange(D, 2*D+1),
         np.arange(D+1, 2*D+2))
 
+    # Input: (parent index)*D x (child offset)*D x (child node)
+    # Output: (parent index)*D x (child offset)*D x (child node)
+    # Kernel: [(neighbour offset)*D] x (child offset)*D x (child_node) x (nephew offset)*D x (nephew node)
     Wpc = parent_child_format(W, D)
     ixns = np.zeros_like(Wpc)
     for offset, fst, snd in offset_slices(width//2, D):
@@ -214,8 +212,8 @@ def values(fs, scaled, leaves, cheb, cutoff):
     
     return f
 
-def solve(prob, cutoff=5):
-    cheb = chebyshev.Chebyshev(10, prob.sources.shape[1])
+def solve(prob, N=10, cutoff=5):
+    cheb = chebyshev.Chebyshev(N, prob.sources.shape[1])
 
     scaled = scale(prob)
     leaves = tree_leaves(scaled)
@@ -233,4 +231,18 @@ def run():
 
     v = solve(prob)
 
-    np.testing.assert_allclose(v, test.solution(prob))
+    np.testing.assert_allclose(v, test.solve(prob))
+
+def benchmark():
+    import pandas as pd
+
+    result = {}
+    for N in np.logspace(1, np.log10(3e4), 50, dtype=int):
+        print(f'Timing {N}')
+        prob = test.random_problem(S=N, T=N, D=2)
+        with aljpy.timer() as bbfmm:
+            solve(prob, N=5)
+        with aljpy.timer() as analytic:
+            test.solve(prob)
+        result[N] = {'bbfmm': bbfmm.time(), 'analytic': analytic.time()}
+    result = pd.DataFrame.from_dict(result, orient='index')
