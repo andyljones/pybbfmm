@@ -1,9 +1,8 @@
 import scipy.signal
 import aljpy
 import numpy as np
-import matplotlib.pyplot as plt
+import numba
 from . import test, chebyshev, tree
-from itertools import product
 
 KERNEL = test.quad_kernel
 EPS = 1e-2
@@ -67,7 +66,6 @@ def pushdown_coeffs(cheb):
     S = cheb.similarity(children, cheb.nodes)
     return S
 
-
 def weights(scaled, cheb, leaves):
     loc = scaled.sources * 2**leaves.depth - leaves.sources
     S = cheb.similarity(cheb.nodes, 2*loc-1)
@@ -83,17 +81,10 @@ def weights(scaled, cheb, leaves):
         Ws.append(np.tensordot(W_exp, coeffs, axes=dot_dims))
     return np.array(list(reversed(Ws)))
 
-def interactions(W, scaled, cheb):
-    if W.dtype == object:
-        return np.array([interactions(w, scaled, cheb) for w in W])
-    if W.shape[0] == 1:
-        return np.zeros_like(W)
-
-    D, N = cheb.D, cheb.N
-    width = W.shape[0]
-
+def nephew_vectors(cheb):
     # (nephew offset) + (nephew node) + (child offset) + (child node) + (D,) 
     # (3, 2)*D + (N**D,) + (2,)*D + (N**D,) + (D,)
+    D, N = cheb.D, cheb.N
 
     child_dims = (1, 1)*D + (1,) + (2,)*D + (1,) + (D,)
     child_offsets = chebyshev.cartesian_product([0, 1], D).reshape(child_dims)
@@ -108,12 +99,25 @@ def interactions(W, scaled, cheb):
     nephew_nodes = (cheb.nodes/2 + 1/2).reshape(nephew_node_dims)
 
     vectors = ((nephew_offsets + nephew_nodes) - (child_offsets + child_nodes))
+    is_neighbour = (abs(nephew_offsets - child_offsets) <= 1).all(-1)
+
+    return vectors, is_neighbour
+
+def interactions(W, scaled, cheb):
+    if W.dtype == object:
+        return np.array([interactions(w, scaled, cheb) for w in W])
+    if W.shape[0] == 1:
+        return np.zeros_like(W)
+
+    D, N = cheb.D, cheb.N
+    width = W.shape[0]
+
+    vectors, is_neighbour = nephew_vectors(cheb)
     vectors = (scaled.limits[1] - scaled.limits[0])/width*vectors
 
     nephew_kernel = KERNEL(np.zeros_like(vectors), vectors)
-
-    is_neighbour = (abs(nephew_offsets - child_offsets) <= 1).all(-1)
     interaction_kernel = np.where(is_neighbour, 0, nephew_kernel)
+
     mirrored = interaction_kernel[(slice(None, None, -1), slice(None))*D]
 
     W_dims = (width//2+2, 2)*D + (N**D,) + (1,)*D + (1,)
@@ -155,6 +159,32 @@ def far_field(ixns, cheb):
         fs[d] = pushed + ixns[d]
     return fs
 
+@numba.jit(nopython=True)
+def _group(linear, depth, D, cutoff):
+    counts = np.full(2**(depth*D), 0)
+    indices = np.full((2**(depth*D), cutoff), -1)
+    for i, idx in enumerate(linear):
+        indices[idx, counts[idx]] = i
+        counts[idx] += 1
+    return indices
+
+def group(leaves, depth, cutoff):
+    D = leaves.shape[1]
+    bases = (2**depth)**(np.arange(D))
+    # Numba can't handle arrays of varying dimension, so here we transform
+    # to linear indices and then return to subscripts afterwards
+    linear = (leaves*bases).sum(-1)
+    indices = _group(linear, depth, D, cutoff)
+    return indices.reshape((2**depth,)*D + (cutoff,))
+
+
+def values(fs, scaled, leaves, cheb, cutoff):
+    S = cheb.similarity(cheb.nodes, scaled.targets)
+    f = (S*fs[-1][tuple(leaves.targets.T)]).sum(-1)
+
+    groups = aljpy.dotdict(
+        sources=group(leaves.sources, leaves.depth, cutoff),
+        targets=group(leaves.targets, leaves.depth, cutoff))
     
 def run():
     prob = test.random_problem(S=100, T=100, D=2)
