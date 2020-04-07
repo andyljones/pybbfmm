@@ -259,7 +259,7 @@ def run():
 
     np.testing.assert_allclose(v, test.solve(prob))
 
-def benchmark(maxsize=50e3, repeats=5):
+def benchmark_both(maxsize=50e3, repeats=5):
     import pandas as pd
 
     # Get numba to compile
@@ -284,5 +284,30 @@ def benchmark(maxsize=50e3, repeats=5):
         axes[1].set_xlabel('n points')
         for ax in axes:
             ax.set_ylabel('average runtime')
+
+    return result
+
+def benchmark(maxsize=50e3, repeats=5):
+    import pandas as pd
+
+    # Get numba to compile
+    solve(test.random_problem())
+
+    result = {}
+    for N in np.logspace(1, np.log10(maxsize), 50, dtype=int):
+        print(f'Timing {N}')
+        for r in range(repeats):
+            prob = test.random_problem(S=N, T=N, D=2)
+            with aljpy.timer() as bbfmm:
+                solve(prob)
+            result[N, r] = bbfmm.time()
+    result = pd.Series(result)
+
+    import matplotlib.pyplot as plt
+    with plt.style.context('seaborn-poster'):
+        ax = result.groupby(level=0).mean().plot()
+        ax.set_title('N=5, D=2')
+        ax.set_xlabel('n points')
+        ax.set_ylabel('average runtime')
 
     return result
