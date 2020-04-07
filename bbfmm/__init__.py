@@ -188,6 +188,17 @@ def group(leaves, depth, cutoff):
     linear = (leaves*bases).sum(-1)
     indices = _group(linear, depth, D, cutoff)
     return indices.reshape((2**depth,)*D + (cutoff,))
+
+def neighbours(groups):
+    width = groups.sources.shape[0]
+    cutoff = groups.sources.shape[-1]
+    D = groups.sources.ndim-1
+    neighbours = np.full((width,)*D + (3,)*D + (cutoff,), -1)
+    for offset, fst, snd in offset_slices(width, D):
+        offset = tuple(offset+1)
+        neighbours[snd + offset] = groups.sources[fst]
+    source_idxs = neighbours.reshape(width*width, 3**D*cutoff)
+    target_idxs = groups.targets.reshape(width*width, cutoff)
     
 def values(fs, scaled, leaves, cheb, cutoff):
     loc = scaled.targets * 2**leaves.depth - leaves.targets
