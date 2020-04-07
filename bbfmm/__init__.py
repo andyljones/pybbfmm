@@ -200,8 +200,12 @@ def values(fs, scaled, leaves, cheb, cutoff):
 
     sources, targets = scaled.scale*scaled.sources, scaled.scale*scaled.targets
     for _, fst, snd in offset_slices(2**leaves.depth, cheb.D):
-        source_group = groups.sources[fst]
-        target_group = groups.targets[snd]
+        source_group, target_group = groups.sources[fst], groups.targets[snd]
+
+        # Bit of a hack to keep the amount of empty cells being evaluated down
+        mask = (source_group > -1).any(-1) | (target_group > -1).any(-1)
+        source_group, target_group = source_group[mask], target_group[mask]
+
         K = KERNEL(
             targets[target_group][..., :, None, :], 
             sources[source_group][..., None, :, :])
@@ -212,11 +216,11 @@ def values(fs, scaled, leaves, cheb, cutoff):
     
     return f
 
-def solve(prob, N=10, cutoff=5):
+def solve(prob, N=5, cutoff=5):
     cheb = chebyshev.Chebyshev(N, prob.sources.shape[1])
 
     scaled = scale(prob)
-    leaves = tree_leaves(scaled)
+    leaves = tree_leaves(scaled, cutoff=cutoff)
 
     Ws = weights(scaled, cheb, leaves)
     ixns = interactions(Ws, scaled, cheb)
@@ -233,8 +237,11 @@ def run():
 
     np.testing.assert_allclose(v, test.solve(prob))
 
-def benchmark(maxsize=30e3, repeats=5):
+def benchmark(maxsize=50e3, repeats=5):
     import pandas as pd
+
+    # Get numba to compile
+    solve(test.random_problem())
 
     result = {}
     for N in np.logspace(1, np.log10(maxsize), 50, dtype=int):
@@ -248,6 +255,12 @@ def benchmark(maxsize=30e3, repeats=5):
             result[N, r] = {'bbfmm': bbfmm.time(), 'analytic': analytic.time()}
     result = pd.DataFrame.from_dict(result, orient='index')
 
-    result.groupby(level=0).mean().plot(loglog=True)
+    import matplotlib.pyplot as plt
+    with plt.style.context('seaborn-poster'):
+        axes = result.groupby(level=0).mean().plot(subplots=True)
+        axes[0].figure.suptitle('N=5, D=2')
+        axes[1].set_xlabel('n points')
+        for ax in axes:
+            ax.set_ylabel('average runtime')
 
     return result
