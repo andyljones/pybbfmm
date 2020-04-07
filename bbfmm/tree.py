@@ -135,10 +135,10 @@ class Leaf(Vertex):
     def values(self):
         V = self.cheb.interpolate(self.into(self.targets), self.f)
 
-        # for neighbour in self.neighbours.flatten():
-        #     V += (KERNEL(self.targets[:, None], neighbour.sources[None, :])*neighbour.charges).sum(-1)
+        for neighbour in self.neighbours.flatten():
+            V += (KERNEL(self.targets[:, None], neighbour.sources[None, :])*neighbour.charges).sum(-1)
         
-        # V += (KERNEL(self.targets[:, None], self.sources[None, :])*self.charges).sum(-1)
+        V += (KERNEL(self.targets[:, None], self.sources[None, :])*self.charges).sum(-1)
 
         return V
 

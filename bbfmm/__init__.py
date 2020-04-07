@@ -190,22 +190,22 @@ def values(fs, scaled, leaves, cheb, cutoff):
     S = cheb.similarity(2*loc-1, cheb.nodes)
     f = (S*fs[-1][tuple(leaves.targets.T)]).sum(-1)
 
-    # groups = aljpy.dotdict(
-    #     sources=group(leaves.sources, leaves.depth, cutoff),
-    #     targets=group(leaves.targets, leaves.depth, cutoff))
+    groups = aljpy.dotdict(
+        sources=group(leaves.sources, leaves.depth, cutoff),
+        targets=group(leaves.targets, leaves.depth, cutoff))
 
-    # scale = scaled.limits[1] - scaled.limits[0]
-    # sources, targets = scale*scaled.sources, scale*scaled.targets
-    # for fst, snd in offset_slices(leaves.depth, cheb.D):
-    #     source_group = groups.sources[fst]
-    #     target_group = groups.targets[snd]
-    #     K = KERNEL(
-    #         targets[source_group][..., :, None, :], 
-    #         sources[target_group][..., None, :, :])
-    #     charges = scaled.charges[source_group]*(source_group > -1)
-    #     f_group = (K*charges[..., None, :]).sum(-1)
+    scale = scaled.limits[1] - scaled.limits[0]
+    sources, targets = scale*scaled.sources, scale*scaled.targets
+    for fst, snd in offset_slices(leaves.depth, cheb.D):
+        source_group = groups.sources[fst]
+        target_group = groups.targets[snd]
+        K = KERNEL(
+            targets[target_group][..., :, None, :], 
+            sources[source_group][..., None, :, :])
+        charges = scaled.charges[source_group]*(source_group > -1)
+        f_group = (K*charges[..., None, :]).sum(-1)
 
-    #     f[target_group[target_group > -1]] += f_group[target_group > -1]
+        f[target_group[target_group > -1]] += f_group[target_group > -1]
     
     return f
 
@@ -224,12 +224,14 @@ def run():
     fs = far_field(ixns, cheb)
     v = values(fs, scaled, leaves, cheb, cutoff)
 
+    np.testing.assert_allclose(v, test.solution(prob))
+
     # Validation
-    root = tree.build_tree(prob)
+    root = tree.build_tree(prob, cheb=cheb)
     root.set_weights()
     tree.set_interactions(root)
     root.set_far_field()
-    tree_v = root.values()
+    v_ref = root.values()
 
     np.testing.assert_allclose(root.W, Ws[0][0, 0])
 
@@ -242,3 +244,6 @@ def run():
             np.testing.assert_allclose(
                 root.children[i, j].children[k, l].children[m, n].f,
                 fs[3][4*i+2*k+m, 4*j+2*l+n])
+    
+    np.testing.assert_allclose(v_ref, v)
+
