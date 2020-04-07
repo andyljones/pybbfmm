@@ -2,7 +2,7 @@ import scipy.signal
 import aljpy
 import numpy as np
 import numba
-from . import test, chebyshev, tree
+from . import test, chebyshev
 
 KERNEL = test.quad_kernel
 EPS = 1e-2
