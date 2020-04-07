@@ -187,25 +187,25 @@ def offset_slices(depth, D):
 
 def values(fs, scaled, leaves, cheb, cutoff):
     loc = scaled.targets * 2**leaves.depth - leaves.targets
-    S = cheb.similarity(loc, cheb.nodes)
+    S = cheb.similarity(2*loc-1, cheb.nodes)
     f = (S*fs[-1][tuple(leaves.targets.T)]).sum(-1)
 
-    groups = aljpy.dotdict(
-        sources=group(leaves.sources, leaves.depth, cutoff),
-        targets=group(leaves.targets, leaves.depth, cutoff))
+    # groups = aljpy.dotdict(
+    #     sources=group(leaves.sources, leaves.depth, cutoff),
+    #     targets=group(leaves.targets, leaves.depth, cutoff))
 
-    scale = scaled.limits[1] - scaled.limits[0]
-    sources, targets = scale*scaled.sources, scale*scaled.targets
-    for fst, snd in offset_slices(leaves.depth, cheb.D):
-        source_group = groups.sources[fst]
-        target_group = groups.targets[snd]
-        K = KERNEL(
-            targets[source_group][..., :, None, :], 
-            sources[target_group][..., None, :, :])
-        charges = scaled.charges[source_group]*(source_group > -1)
-        f_group = (K*charges[..., None, :]).sum(-1)
+    # scale = scaled.limits[1] - scaled.limits[0]
+    # sources, targets = scale*scaled.sources, scale*scaled.targets
+    # for fst, snd in offset_slices(leaves.depth, cheb.D):
+    #     source_group = groups.sources[fst]
+    #     target_group = groups.targets[snd]
+    #     K = KERNEL(
+    #         targets[source_group][..., :, None, :], 
+    #         sources[target_group][..., None, :, :])
+    #     charges = scaled.charges[source_group]*(source_group > -1)
+    #     f_group = (K*charges[..., None, :]).sum(-1)
 
-        f[target_group[target_group > -1]] += f_group[target_group > -1]
+    #     f[target_group[target_group > -1]] += f_group[target_group > -1]
     
     return f
 
