@@ -13,11 +13,13 @@ def limits(prob):
 
 def scale(prob):
     lims = limits(prob)
+    lower, scale = lims[0], lims[1] - lims[0]
     return aljpy.dotdict(
         limits=lims,
-        sources=(prob.sources - lims[0])/(lims[1] - lims[0]),
+        scale=scale,
+        sources=(prob.sources - lower)/scale,
         charges=prob.charges,
-        targets=(prob.targets - lims[0])/(lims[1] - lims[0]))
+        targets=(prob.targets - lower)/scale)
 
 def leaf_sum(l, x, d):
     x = np.asarray(x)
@@ -81,29 +83,55 @@ def weights(scaled, cheb, leaves):
         Ws.append(np.tensordot(W_exp, coeffs, axes=dot_dims))
     return np.array(list(reversed(Ws)))
 
-def nephew_vectors(cheb):
-    # (nephew offset) + (nephew node) + (child offset) + (child node) + (D,) 
-    # (3, 2)*D + (N**D,) + (2,)*D + (N**D,) + (D,)
-    D, N = cheb.D, cheb.N
+def parent_child_format(W, D):
+    width = W.shape[0]
+    tail = W.shape[D:]
 
-    child_dims = (1, 1)*D + (1,) + (2,)*D + (1,) + (D,)
-    child_offsets = chebyshev.cartesian_product([0, 1], D).reshape(child_dims)
+    Wpc = W.reshape((width//2, 2)*D + tail)
+    Wpc = Wpc.transpose(
+        [2*d for d in range(D)] + 
+        [2*d+1 for d in range(D)] + 
+        [d for d in range(2*D, Wpc.ndim)])
+    return Wpc
 
-    child_node_dims = (1, 1)*D + (1,) + (1,)*D + (N**D,) + (D,)
-    child_nodes = (cheb.nodes/2 + 1/2).reshape(child_node_dims)
+def independent_format(Wpc, D):
+    width = Wpc.shape[0]
+    tail = Wpc.shape[2*D:]
 
-    nephew_dims = (3, 2)*D + (1,) + (1,)*D + (1,) + (D,)
-    nephew_offsets = chebyshev.cartesian_product(np.arange(-2, 4), D).reshape(nephew_dims)
+    W = Wpc.transpose(
+        sum([[d, D+d] for d in range(D)], []) +
+        [d for d in range(2*D, Wpc.ndim)])
+    W = W.reshape((2*width,)*D + tail)
+    return W
+    
+def offset_slices(width, D):
+    for offset in chebyshev.flat_cartesian_product([-1, 0, 1], D):
+        first = tuple(slice(max(+o, 0), min(o+width, width)) for o in offset)
+        second = tuple(slice(max(-o, 0), min(-o+width, width)) for o in offset)
+        yield offset, first, second
 
-    nephew_node_dims = (1, 1)*D + (N**D,) + (1,)*D + (1,) + (D,)
-    nephew_nodes = (cheb.nodes/2 + 1/2).reshape(nephew_node_dims)
+def nephew_vectors(offset, cheb):
+    D = cheb.D
 
-    vectors = ((nephew_offsets + nephew_nodes) - (child_offsets + child_nodes))
-    is_neighbour = (abs(nephew_offsets - child_offsets) <= 1).all(-1)
+    pos = chebyshev.cartesian_product([0, 1], D)[..., None, :]
+    nodes = pos + (cheb.nodes + 1)/2
 
-    return vectors, is_neighbour
+    child_nodes = nodes[(...,)+(None,)*(D+1)+(slice(None),)]
+    nephew_nodes = (2*offset + nodes)[(None,)*(D+1)]
+    node_vectors = nephew_nodes - child_nodes
+
+    child_pos = pos[(...,)+(None,)*(D+1)+(slice(None),)]
+    nephew_pos = (2*offset + pos)[(None,)*(D+1)]
+    pos_vectors = nephew_pos - child_pos
+
+    return node_vectors, pos_vectors
 
 def interactions(W, scaled, cheb):
+    """
+    Input: (parent index)*D x (child offset)*D x (child node)
+    Output: (parent index)*D x (child offset)*D x (child node)
+    Kernel: [(neighbour offset)*D] x (child offset)*D x (child_node) x (nephew offset)*D x (nephew node)
+    """
     if W.dtype == object:
         return np.array([interactions(w, scaled, cheb) for w in W])
     if W.shape[0] == 1:
@@ -112,32 +140,18 @@ def interactions(W, scaled, cheb):
     D, N = cheb.D, cheb.N
     width = W.shape[0]
 
-    vectors, is_neighbour = nephew_vectors(cheb)
-    vectors = (scaled.limits[1] - scaled.limits[0])/width*vectors
+    dot_dims = (
+        np.arange(D, 2*D+1),
+        np.arange(D+1, 2*D+2))
 
-    nephew_kernel = KERNEL(np.zeros_like(vectors), vectors)
-    interaction_kernel = np.where(is_neighbour, 0, nephew_kernel)
-
-    mirrored = interaction_kernel[(slice(None, None, -1), slice(None))*D]
-
-    W_dims = (width//2+2, 2)*D + (N**D,) + (1,)*D + (1,)
-    Wp = np.pad(W, (((2, 2),)*D + ((0, 0),)))
-    Wp = Wp.reshape(W_dims)
-
-    ixns = scipy.signal.fftconvolve(
-        Wp,
-        mirrored,
-        mode='valid',
-        axes=np.arange(0, 2*D, 2)
-    ).sum(tuple(2*i+1 for i in range(D)) + (2*D,), keepdims=True)
-
-    squeeze = tuple(2*d+1 for d in range(D)) + (2*D,)
-    ixns = ixns.squeeze(squeeze)
-
-    axes = sum([(i, D+i) for i in range(D)], ()) + (2*D,)
-    ixns = ixns.transpose(axes)
-
-    ixns = ixns.reshape((width,)*D + (N**D,))
+    Wpc = parent_child_format(W, D)
+    ixns = np.zeros_like(Wpc)
+    for offset, fst, snd in offset_slices(width//2, D):
+        node_vecs, pos_vecs = nephew_vectors(offset, cheb)
+        K = KERNEL(np.zeros_like(node_vecs), scaled.scale*node_vecs/width)
+        K = np.where((abs(pos_vecs) <= 1).all(-1), 0, K)
+        ixns[snd] += np.tensordot(Wpc[fst], K, dot_dims)
+    ixns = independent_format(ixns, D)
 
     return ixns
 
@@ -176,15 +190,7 @@ def group(leaves, depth, cutoff):
     linear = (leaves*bases).sum(-1)
     indices = _group(linear, depth, D, cutoff)
     return indices.reshape((2**depth,)*D + (cutoff,))
-
-def offset_slices(depth, D):
-    width = 2**depth
-    for offset in chebyshev.flat_cartesian_product([-1, 0, 1], D):
-        first = tuple(slice(max(+o, 0), min(o+width, width)) for o in offset)
-        second = tuple(slice(max(-o, 0), min(-o+width, width)) for o in offset)
-        yield first, second
     
-
 def values(fs, scaled, leaves, cheb, cutoff):
     loc = scaled.targets * 2**leaves.depth - leaves.targets
     S = cheb.similarity(2*loc-1, cheb.nodes)
@@ -194,9 +200,8 @@ def values(fs, scaled, leaves, cheb, cutoff):
         sources=group(leaves.sources, leaves.depth, cutoff),
         targets=group(leaves.targets, leaves.depth, cutoff))
 
-    scale = scaled.limits[1] - scaled.limits[0]
-    sources, targets = scale*scaled.sources, scale*scaled.targets
-    for fst, snd in offset_slices(leaves.depth, cheb.D):
+    sources, targets = scaled.scale*scaled.sources, scaled.scale*scaled.targets
+    for _, fst, snd in offset_slices(2**leaves.depth, cheb.D):
         source_group = groups.sources[fst]
         target_group = groups.targets[snd]
         K = KERNEL(

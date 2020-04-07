@@ -250,3 +250,60 @@ def run():
 
     v = test.solution(prob)
     np.around(vhat - v, 3)
+
+# if W.dtype == object:
+#     return np.array([interactions(w, scaled, cheb) for w in W])
+# if W.shape[0] == 1:
+#     return np.zeros_like(W)
+
+# D, N = cheb.D, cheb.N
+# width = W.shape[0]
+
+# vectors, is_neighbour = nephew_vectors(cheb)
+# vectors = (scaled.limits[1] - scaled.limits[0])/width*vectors
+
+# nephew_kernel = KERNEL(np.zeros_like(vectors), vectors)
+# interaction_kernel = np.where(is_neighbour, 0, nephew_kernel)
+
+# mirrored = interaction_kernel[(slice(None, None, -1), slice(None))*D]
+
+# W_dims = (width//2+2, 2)*D + (N**D,) + (1,)*D + (1,)
+# Wp = np.pad(W, (((2, 2),)*D + ((0, 0),)))
+# Wp = Wp.reshape(W_dims)
+
+# ixns = scipy.signal.fftconvolve(
+#     Wp,
+#     mirrored,
+#     mode='valid',
+#     axes=np.arange(0, 2*D, 2)
+# ).sum(tuple(2*i+1 for i in range(D)) + (2*D,), keepdims=True)
+
+# squeeze = tuple(2*d+1 for d in range(D)) + (2*D,)
+# ixns = ixns.squeeze(squeeze)
+
+# axes = sum([(i, D+i) for i in range(D)], ()) + (2*D,)
+# ixns = ixns.transpose(axes)
+
+# ixns = ixns.reshape((width,)*D + (N**D,))
+
+# def nephew_vectors(cheb):
+#     # (nephew offset) + (nephew node) + (child offset) + (child node) + (D,) 
+#     # (3, 2)*D + (N**D,) + (2,)*D + (N**D,) + (D,)
+#     D, N = cheb.D, cheb.N
+
+#     child_dims = (1, 1)*D + (1,) + (2,)*D + (1,) + (D,)
+#     child_offsets = chebyshev.cartesian_product([0, 1], D).reshape(child_dims)
+
+#     child_node_dims = (1, 1)*D + (1,) + (1,)*D + (N**D,) + (D,)
+#     child_nodes = (cheb.nodes/2 + 1/2).reshape(child_node_dims)
+
+#     nephew_dims = (3, 2)*D + (1,) + (1,)*D + (1,) + (D,)
+#     nephew_offsets = chebyshev.cartesian_product(np.arange(-2, 4), D).reshape(nephew_dims)
+
+#     nephew_node_dims = (1, 1)*D + (N**D,) + (1,)*D + (1,) + (D,)
+#     nephew_nodes = (cheb.nodes/2 + 1/2).reshape(nephew_node_dims)
+
+#     vectors = ((nephew_offsets + nephew_nodes) - (child_offsets + child_nodes))
+#     is_neighbour = (abs(nephew_offsets - child_offsets) <= 1).all(-1)
+
+#     return vectors, is_neighbour
