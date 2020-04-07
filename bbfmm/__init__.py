@@ -177,6 +177,13 @@ def group(leaves, depth, cutoff):
     indices = _group(linear, depth, D, cutoff)
     return indices.reshape((2**depth,)*D + (cutoff,))
 
+def offset_slices(depth, D):
+    width = 2**depth
+    for offset in chebyshev.flat_cartesian_product([-1, 0, 1], D):
+        first = tuple(slice(max(+o, 0), min(o+width, width)) for o in offset)
+        second = tuple(slice(max(-o, 0), min(-o+width, width)) for o in offset)
+        yield first, second
+    
 
 def values(fs, scaled, leaves, cheb, cutoff):
     loc = scaled.targets * 2**leaves.depth - leaves.targets
@@ -189,11 +196,18 @@ def values(fs, scaled, leaves, cheb, cutoff):
 
     scale = scaled.limits[1] - scaled.limits[0]
     sources, targets = scale*scaled.sources, scale*scaled.targets
-    K = KERNEL(targets[groups.targets][..., :, None, :], sources[groups.sources][..., None, :, :])
-    charges = scaled.charges[groups.sources]*(groups.sources > -1)
-    f_self = (K*charges[..., None, :]).sum(-1)
+    for fst, snd in offset_slices(leaves.depth, cheb.D):
+        source_group = groups.sources[fst]
+        target_group = groups.targets[snd]
+        K = KERNEL(
+            targets[source_group][..., :, None, :], 
+            sources[target_group][..., None, :, :])
+        charges = scaled.charges[source_group]*(source_group > -1)
+        f_group = (K*charges[..., None, :]).sum(-1)
 
-    f[groups.targets[groups.targets > -1]] += f_self[groups.targets > -1]
+        f[target_group[target_group > -1]] += f_group[target_group > -1]
+    
+    return f
 
     
 def run():
@@ -201,18 +215,21 @@ def run():
 
     cheb = chebyshev.Chebyshev(10, prob.sources.shape[1])
 
+    cutoff = 5
     scaled = scale(prob)
-    leaves = tree_leaves(scaled, cutoff=5)
+    leaves = tree_leaves(scaled)
 
     Ws = weights(scaled, cheb, leaves)
     ixns = interactions(Ws, scaled, cheb)
     fs = far_field(ixns, cheb)
+    v = values(fs, scaled, leaves, cheb, cutoff)
 
     # Validation
     root = tree.build_tree(prob)
     root.set_weights()
     tree.set_interactions(root)
     root.set_far_field()
+    tree_v = root.values()
 
     np.testing.assert_allclose(root.W, Ws[0][0, 0])
 
