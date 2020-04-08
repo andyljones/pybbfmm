@@ -28,11 +28,11 @@ class Chebyshev:
     def similarity(self, a, b):
         """
         Args:
-            a: (m, d)
-            b: (j, d)
+            a: ms + (d,)
+            b: ns + (d,)
         
         Returns:
-            (m, j)
+            ms + ns
         """
         assert ((-1 <= a) & (a <= +1)).all()
         assert ((-1 <= b) & (b <= +1)).all()

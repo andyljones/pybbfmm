@@ -239,7 +239,7 @@ def values(fs, scaled, leaves, cheb, cutoff):
     
     return f + near_field(scaled, leaves, cutoff)
 
-def solve(prob, N=5, cutoff=5):
+def solve(prob, N=4, cutoff=8):
     cheb = chebyshev.Chebyshev(N, prob.sources.shape[1])
 
     scaled = scale(prob)
