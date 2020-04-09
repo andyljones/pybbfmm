@@ -172,6 +172,27 @@ def far_field(ixns, cheb):
         fs[d] = pushed + ixns[d]
     return fs
 
+def as_index(subscripts, depth):
+    D = subscripts.shape[-1]
+    bases = (2**depth)**np.arange(D)
+    linear = (subscripts*bases).sum(-1)
+    return linear
+
+def counts_of(linear):
+    ordered = linear[np.argsort(linear)]
+    last = np.concatenate([
+        ordered[1:] != ordered[:-1],
+        np.array([True])])
+    cum_replicas = np.concatenate([
+        np.asarray([-1,]),
+        np.arange(len(linear))[last]])
+    n_replicas = np.diff(cum_replicas)
+
+    steps = np.ones(len(linear), dtype=n_replicas.dtype)
+    steps = jax.ops.index_add(steps, last[:-1], -n_replicas[:-1])
+    return np.cumsum(steps)
+
+
 @partial(jax.jit, static_argnums=(1, 2, 3))
 def _group(linear, depth, D, cutoff):
     counts = np.full(2**(depth*D), 0)
