@@ -179,26 +179,31 @@ def linear_index(subscripts, depth):
     return linear
 
 def counts_of(linear):
-    ordered = linear[np.argsort(linear)]
-    last = np.concatenate([
-        ordered[1:] != ordered[:-1],
-        np.array([True])])
+    argsort = np.argsort(linear)
+    ordered = linear[argsort]
+    last  = np.concatenate([ordered[1:] != ordered[:-1], np.array([True])])
     cum_replicas = np.concatenate([
         np.asarray([-1,]),
         np.arange(len(linear))[last]])
     n_replicas = np.diff(cum_replicas)
 
-    steps = np.ones(len(linear), dtype=n_replicas.dtype)
+    steps = np.ones(len(linear)-1, dtype=n_replicas.dtype)
     steps = jax.ops.index_add(steps, last[:-1], -n_replicas[:-1])
-    return ordered, np.cumsum(steps)
+    steps = np.concatenate([np.array([0]), steps])
+    ordered_index = np.cumsum(steps)
+
+    counts = np.empty_like(ordered_index)
+    counts = jax.ops.index_update(counts, argsort, ordered_index)
+
+    return counts
 
 def group(leaves, depth, cutoff):
     linear = linear_index(leaves, depth)
-    ordered, counts = counts_of(linear)
+    counts = counts_of(linear)
 
     D = leaves.shape[-1]
     indices = np.full((2**(depth*D), cutoff), -1)
-    indices = jax.ops.index_assign()
+    indices = jax.ops.index_update(indices, (linear, counts), np.arange(len(linear)))
 
     return indices.reshape((2**depth,)*D + (cutoff,))
 
