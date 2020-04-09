@@ -211,17 +211,16 @@ def neighbours(groups):
     width = groups.sources.shape[0]
     cutoff = groups.sources.shape[-1]
     D = groups.sources.ndim-1
-    neighbours = np.full((width,)*D + (3,)*D + (cutoff,), -1)
     for offset, fst, snd in offset_slices(width, D):
-        offset = tuple(offset+1)
-        neighbours = jax.ops.index_update(neighbours, snd + offset, groups.sources[fst])
-    source_idxs = neighbours.reshape(width**D, 3**D*cutoff)
-    target_idxs = groups.targets.reshape(width**D, cutoff)
+        neighbours = np.full((width,)*D + (cutoff,), -1)
+        neighbours = jax.ops.index_update(neighbours, snd, groups.sources[fst])
+        source_idxs = neighbours.reshape(width**D, cutoff)
+        target_idxs = groups.targets.reshape(width**D, cutoff)
 
-    pairs = np.stack([
-        np.repeat(source_idxs[..., None, :], cutoff, -2),
-        np.repeat(target_idxs[..., :, None], 3**D*cutoff, -1)], -1)
-    return pairs[(pairs > -1).all(-1)]
+        pairs = np.stack([
+            np.repeat(source_idxs[..., None, :], cutoff, -2),
+            np.repeat(target_idxs[..., :, None], cutoff, -1)], -1)
+        yield pairs[(pairs > -1).all(-1)].T
 
 def near_field(scaled, leaves, cutoff):
     sources, targets = scaled.scale*scaled.sources, scaled.scale*scaled.targets
@@ -229,12 +228,11 @@ def near_field(scaled, leaves, cutoff):
     groups = aljpy.dotdict(
         sources=group(leaves.sources, leaves.depth, cutoff),
         targets=group(leaves.targets, leaves.depth, cutoff))
-    source_idxs, target_idxs = neighbours(groups).T 
-
-    K = KERNEL(sources[source_idxs], targets[target_idxs])
 
     totals = np.zeros(len(targets))
-    totals = jax.ops.index_add(totals, target_idxs, K*scaled.charges[source_idxs])
+    for source_idxs, target_idxs in neighbours(groups):
+        K = KERNEL(sources[source_idxs], targets[target_idxs])
+        totals = jax.ops.index_add(totals, target_idxs, K*scaled.charges[source_idxs])
 
     return totals
 
@@ -276,9 +274,9 @@ def benchmark(maxsize=1e6, repeats=5):
     for N in np.logspace(1, np.log10(maxsize), 50, dtype=int):
         print(f'Timing {N}')
         # Get JAX to compile
-        solve(test.random_problem(S=N, T=N, D=2))
         for r in range(repeats):
             prob = test.random_problem(S=N, T=N, D=2)
+            solve(prob)
             with aljpy.timer() as bbfmm:
                 solve(prob)
             result[N, r] = bbfmm.time()
