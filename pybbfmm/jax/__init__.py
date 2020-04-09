@@ -172,7 +172,7 @@ def far_field(ixns, cheb):
         fs[d] = pushed + ixns[d]
     return fs
 
-def as_index(subscripts, depth):
+def linear_index(subscripts, depth):
     D = subscripts.shape[-1]
     bases = (2**depth)**np.arange(D)
     linear = (subscripts*bases).sum(-1)
@@ -190,25 +190,16 @@ def counts_of(linear):
 
     steps = np.ones(len(linear), dtype=n_replicas.dtype)
     steps = jax.ops.index_add(steps, last[:-1], -n_replicas[:-1])
-    return np.cumsum(steps)
-
-
-@partial(jax.jit, static_argnums=(1, 2, 3))
-def _group(linear, depth, D, cutoff):
-    counts = np.full(2**(depth*D), 0)
-    indices = np.full((2**(depth*D), cutoff), -1)
-    for i, idx in enumerate(linear):
-        indices = jax.ops.index_update(indices, (idx, counts[idx]), i)
-        counts = jax.ops.index_add(counts, idx, 1)
-    return indices
+    return ordered, np.cumsum(steps)
 
 def group(leaves, depth, cutoff):
-    D = leaves.shape[1]
-    bases = (2**depth)**(np.arange(D))
-    # Numba can't handle arrays of varying dimension, so here we transform
-    # to linear indices and then return to subscripts afterwards
-    linear = (leaves*bases).sum(-1)
-    indices = _group(linear, depth, D, cutoff)
+    linear = linear_index(leaves, depth)
+    ordered, counts = counts_of(linear)
+
+    D = leaves.shape[-1]
+    indices = np.full((2**(depth*D), cutoff), -1)
+    indices = jax.ops.index_assign()
+
     return indices.reshape((2**depth,)*D + (cutoff,))
 
 @jax.jit
