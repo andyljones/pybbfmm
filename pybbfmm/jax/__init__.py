@@ -8,10 +8,6 @@ import numpy as onp
 KERNEL = jax.jit(test.quad_kernel)
 EPS = 1e-2
 
-N = 4
-D = 2
-C = 5
-
 def limits(prob):
     points = np.concatenate([prob.sources, prob.targets])
     return np.stack([points.min(0) - EPS, points.max(0) + EPS])
@@ -86,12 +82,86 @@ def weights(scaled, cheb, leaves):
         exp_dims = sum([(s//2, 2) for s in Ws[-1].shape[:-1]], ())
         W_exp = Ws[-1].reshape(*exp_dims, -1)
         Ws.append(np.tensordot(W_exp, coeffs, axes=dot_dims))
-    return np.array(list(reversed(Ws)))
+    return list(reversed(Ws))
+
+def parent_child_format(W, D):
+    width = W.shape[0]
+    tail = W.shape[D:]
+
+    Wpc = W.reshape((width//2, 2)*D + tail)
+    Wpc = Wpc.transpose(
+        [2*d for d in range(D)] + 
+        [2*d+1 for d in range(D)] + 
+        [d for d in range(2*D, Wpc.ndim)])
+    return Wpc
+
+def independent_format(Wpc, D):
+    width = Wpc.shape[0]
+    tail = Wpc.shape[2*D:]
+
+    W = Wpc.transpose(
+        sum([[d, D+d] for d in range(D)], []) +
+        [d for d in range(2*D, Wpc.ndim)])
+    W = W.reshape((2*width,)*D + tail)
+    return W
+    
+def offset_slices(width, D):
+    for offset in chebyshev.flat_cartesian_product([-1, 0, 1], D):
+        first = tuple(slice(max(+o, 0), min(o+width, width)) for o in offset)
+        second = tuple(slice(max(-o, 0), min(-o+width, width)) for o in offset)
+        yield offset, first, second
+
+def nephew_vectors(offset, cheb):
+    D = cheb.D
+
+    pos = chebyshev.cartesian_product([0, 1], D)[..., None, :]
+    nodes = pos + (cheb.nodes + 1)/2
+
+    child_nodes = nodes[(...,)+(None,)*(D+1)+(slice(None),)]
+    nephew_nodes = (2*offset + nodes)[(None,)*(D+1)]
+    node_vectors = nephew_nodes - child_nodes
+
+    child_pos = pos[(...,)+(None,)*(D+1)+(slice(None),)]
+    nephew_pos = (2*offset + pos)[(None,)*(D+1)]
+    pos_vectors = nephew_pos - child_pos
+
+    return node_vectors, pos_vectors
+
+def interactions(W, scaled, cheb):
+    if isinstance(W, list):
+        return [interactions(w, scaled, cheb) for w in W]
+    if W.shape[0] == 1:
+        return np.zeros_like(W)
+
+    D, N = cheb.D, cheb.N
+    width = W.shape[0]
+
+    dot_dims = (
+        tuple(range(D, 2*D+1)),
+        tuple(range(D+1, 2*D+2)))
+
+    # Input: (parent index)*D x (child offset)*D x (child node)
+    # Output: (parent index)*D x (child offset)*D x (child node)
+    # Kernel: [(neighbour offset)*D] x (child offset)*D x (child_node) x (nephew offset)*D x (nephew node)
+    Wpc = parent_child_format(W, D)
+    ixns = np.zeros_like(Wpc)
+    for offset, fst, snd in offset_slices(width//2, D):
+        node_vecs, pos_vecs = nephew_vectors(offset, cheb)
+        K = KERNEL(np.zeros_like(node_vecs), scaled.scale*node_vecs/width)
+        K = np.where((abs(pos_vecs) <= 1).all(-1), 0, K)
+        ixns = jax.ops.index_add(ixns, snd, np.tensordot(Wpc[fst], K, dot_dims))
+    ixns = independent_format(ixns, D)
+
+    return ixns
 
 def run():
     N = 4
     cutoff = 5
+
     prob = test.random_problem(S=100, T=100, D=2)
+    cheb = chebyshev.Chebyshev(N, prob.sources.shape[1])
 
     scaled = scale(prob)
     leaves = tree_leaves(scaled, cutoff=cutoff)
+    ws = weights(scaled, cheb, leaves)
+    ixns = interactions(ws, scaled, cheb)

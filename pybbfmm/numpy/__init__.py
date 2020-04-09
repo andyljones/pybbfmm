@@ -245,8 +245,8 @@ def solve(prob, N=4, cutoff=8):
     scaled = scale(prob)
     leaves = tree_leaves(scaled, cutoff=cutoff)
 
-    Ws = weights(scaled, cheb, leaves)
-    ixns = interactions(Ws, scaled, cheb)
+    ws = weights(scaled, cheb, leaves)
+    ixns = interactions(ws, scaled, cheb)
     fs = far_field(ixns, cheb)
     v = values(fs, scaled, leaves, cheb, cutoff)
 
