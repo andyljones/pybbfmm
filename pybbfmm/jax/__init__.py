@@ -207,33 +207,12 @@ def group(leaves, depth, cutoff):
 
     return indices.reshape((2**depth,)*D + (cutoff,))
 
-@jax.jit
-def _neighbours(source_idxs, target_idxs, pairs):
-    n = 0
-    for i in range(source_idxs.shape[0]):
-        for j in range(source_idxs.shape[1]):
-            if source_idxs[i, j] > -1:
-                for k in range(target_idxs.shape[1]):
-                    if target_idxs[i, k] > -1:
-                        pair = (source_idxs[i, j], target_idxs[i, k])
-                        pairs = jax.ops.index_update(pairs, n, pair)
-                        n += 1
-    return pairs
-
 def neighbours(groups):
-    width = groups.sources.shape[0]
     cutoff = groups.sources.shape[-1]
-    D = groups.sources.ndim-1
-    neighbours = np.full((width,)*D + (3,)*D + (cutoff,), -1)
-    for offset, fst, snd in offset_slices(width, D):
-        offset = tuple(offset+1)
-        neighbours = jax.ops.index_update(neighbours, snd + offset, groups.sources[fst])
-    source_idxs = neighbours.reshape(width*width, 3**D*cutoff)
-    target_idxs = groups.targets.reshape(width*width, cutoff)
-
-    N = ((source_idxs != -1).sum(-1)*(target_idxs != -1).sum(-1)).sum()
-    pairs = np.full((N, 2), -1)
-    return _neighbours(source_idxs, target_idxs, pairs)
+    pairs = np.stack([
+        np.repeat(groups.sources[..., None, :], cutoff, -2),
+        np.repeat(groups.targets[..., :, None], cutoff, -1)], -1)
+    return pairs[(pairs > -1).all(-1)]
 
 def near_field(scaled, leaves, cutoff):
     sources, targets = scaled.scale*scaled.sources, scaled.scale*scaled.targets
@@ -258,6 +237,19 @@ def values(fs, scaled, leaves, cheb, cutoff):
     f = (S*fs[-1][tuple(leaves.targets.T)]).sum(-1)
     
     return f + n
+
+def solve(prob, N=4, cutoff=8):
+    cheb = chebyshev.Chebyshev(N, prob.sources.shape[1])
+
+    scaled = scale(prob)
+    leaves = tree_leaves(scaled, cutoff=cutoff)
+
+    ws = weights(scaled, cheb, leaves)
+    ixns = interactions(ws, scaled, cheb)
+    fs = far_field(ixns, cheb)
+    v = values(fs, scaled, leaves, cheb, cutoff)
+
+    return v
 
 def run():
     N = 4
