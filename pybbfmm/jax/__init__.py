@@ -154,6 +154,94 @@ def interactions(W, scaled, cheb):
 
     return ixns
 
+def far_field(ixns, cheb):
+    N, D = cheb.N, cheb.D
+    fs = [None for _ in ixns]
+    fs[0] = ixns[0]
+
+    dot_dims = (D, D+1)
+    coeffs = pushdown_coeffs(cheb)
+    for d in range(1, len(ixns)):
+        pushed = np.tensordot(fs[d-1], coeffs, dot_dims)
+        dims = sum([(i, D+i) for i in range(D)], ()) + (2*D,)
+        pushed = pushed.transpose(dims)
+
+        width = 2*fs[d-1].shape[0]
+        pushed = pushed.reshape((width,)*D + (N**D,))
+
+        fs[d] = pushed + ixns[d]
+    return fs
+
+@partial(jax.jit, static_argnums=(1, 2, 3))
+def _group(linear, depth, D, cutoff):
+    counts = np.full(2**(depth*D), 0)
+    indices = np.full((2**(depth*D), cutoff), -1)
+    for i, idx in enumerate(linear):
+        indices = jax.ops.index_update(indices, (idx, counts[idx]), i)
+        counts = jax.ops.index_add(counts, idx, 1)
+    return indices
+
+def group(leaves, depth, cutoff):
+    D = leaves.shape[1]
+    bases = (2**depth)**(np.arange(D))
+    # Numba can't handle arrays of varying dimension, so here we transform
+    # to linear indices and then return to subscripts afterwards
+    linear = (leaves*bases).sum(-1)
+    indices = _group(linear, depth, D, cutoff)
+    return indices.reshape((2**depth,)*D + (cutoff,))
+
+@jax.jit
+def _neighbours(source_idxs, target_idxs, pairs):
+    n = 0
+    for i in range(source_idxs.shape[0]):
+        for j in range(source_idxs.shape[1]):
+            if source_idxs[i, j] > -1:
+                for k in range(target_idxs.shape[1]):
+                    if target_idxs[i, k] > -1:
+                        pair = (source_idxs[i, j], target_idxs[i, k])
+                        pairs = jax.ops.index_update(pairs, n, pair)
+                        n += 1
+    return pairs
+
+def neighbours(groups):
+    width = groups.sources.shape[0]
+    cutoff = groups.sources.shape[-1]
+    D = groups.sources.ndim-1
+    neighbours = np.full((width,)*D + (3,)*D + (cutoff,), -1)
+    for offset, fst, snd in offset_slices(width, D):
+        offset = tuple(offset+1)
+        neighbours = jax.ops.index_update(neighbours, snd + offset, groups.sources[fst])
+    source_idxs = neighbours.reshape(width*width, 3**D*cutoff)
+    target_idxs = groups.targets.reshape(width*width, cutoff)
+
+    N = ((source_idxs != -1).sum(-1)*(target_idxs != -1).sum(-1)).sum()
+    pairs = np.full((N, 2), -1)
+    return _neighbours(source_idxs, target_idxs, pairs)
+
+def near_field(scaled, leaves, cutoff):
+    sources, targets = scaled.scale*scaled.sources, scaled.scale*scaled.targets
+
+    groups = aljpy.dotdict(
+        sources=group(leaves.sources, leaves.depth, cutoff),
+        targets=group(leaves.targets, leaves.depth, cutoff))
+    source_idxs, target_idxs = neighbours(groups).T 
+
+    K = KERNEL(sources[source_idxs], targets[target_idxs])
+
+    totals = np.zeros(len(targets))
+    totals = jax.ops.index_add(totals, target_idxs, K*scaled.charges[source_idxs])
+
+    return totals
+
+def values(fs, scaled, leaves, cheb, cutoff):
+    n = near_field(scaled, leaves, cutoff)
+
+    loc = scaled.targets * 2**leaves.depth - leaves.targets
+    S = cheb.similarity(2*loc-1, cheb.nodes)
+    f = (S*fs[-1][tuple(leaves.targets.T)]).sum(-1)
+    
+    return f + n
+
 def run():
     N = 4
     cutoff = 5
