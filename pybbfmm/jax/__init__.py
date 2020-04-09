@@ -208,10 +208,19 @@ def group(leaves, depth, cutoff):
     return indices.reshape((2**depth,)*D + (cutoff,))
 
 def neighbours(groups):
+    width = groups.sources.shape[0]
     cutoff = groups.sources.shape[-1]
+    D = groups.sources.ndim-1
+    neighbours = np.full((width,)*D + (3,)*D + (cutoff,), -1)
+    for offset, fst, snd in offset_slices(width, D):
+        offset = tuple(offset+1)
+        neighbours = jax.ops.index_update(neighbours, snd + offset, groups.sources[fst])
+    source_idxs = neighbours.reshape(width**D, 3**D*cutoff)
+    target_idxs = groups.targets.reshape(width**D, cutoff)
+
     pairs = np.stack([
-        np.repeat(groups.sources[..., None, :], cutoff, -2),
-        np.repeat(groups.targets[..., :, None], cutoff, -1)], -1)
+        np.repeat(source_idxs[..., None, :], cutoff, -2),
+        np.repeat(target_idxs[..., :, None], 3**D*cutoff, -1)], -1)
     return pairs[(pairs > -1).all(-1)]
 
 def near_field(scaled, leaves, cutoff):
@@ -249,16 +258,37 @@ def solve(prob, N=4, cutoff=8):
     fs = far_field(ixns, cheb)
     v = values(fs, scaled, leaves, cheb, cutoff)
 
-    return v
+    return aljpy.dotdict(
+        leaves=leaves,
+        ws=ws,
+        ixns=ixns,
+        fs=fs,
+        v=v)
 
 def run():
-    N = 4
-    cutoff = 5
-
     prob = test.random_problem(S=100, T=100, D=2)
-    cheb = chebyshev.Chebyshev(N, prob.sources.shape[1])
+    soln = solve(prob)
 
-    scaled = scale(prob)
-    leaves = tree_leaves(scaled, cutoff=cutoff)
-    ws = weights(scaled, cheb, leaves)
-    ixns = interactions(ws, scaled, cheb)
+def benchmark(maxsize=1e6, repeats=5):
+    import pandas as pd
+
+    result = {}
+    for N in np.logspace(1, np.log10(maxsize), 50, dtype=int):
+        print(f'Timing {N}')
+        # Get JAX to compile
+        solve(test.random_problem(S=N, T=N, D=2))
+        for r in range(repeats):
+            prob = test.random_problem(S=N, T=N, D=2)
+            with aljpy.timer() as bbfmm:
+                solve(prob)
+            result[N, r] = bbfmm.time()
+    result = pd.Series(result)
+
+    import matplotlib.pyplot as plt
+    with plt.style.context('seaborn-poster'):
+        ax = result.groupby(level=0).mean().plot()
+        ax.set_title('N=5, D=2')
+        ax.set_xlabel('n points')
+        ax.set_ylabel('average runtime')
+
+    return result

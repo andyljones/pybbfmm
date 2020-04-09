@@ -212,8 +212,8 @@ def neighbours(groups):
     for offset, fst, snd in offset_slices(width, D):
         offset = tuple(offset+1)
         neighbours[snd + offset] = groups.sources[fst]
-    source_idxs = neighbours.reshape(width*width, 3**D*cutoff)
-    target_idxs = groups.targets.reshape(width*width, cutoff)
+    source_idxs = neighbours.reshape(width**D, 3**D*cutoff)
+    target_idxs = groups.targets.reshape(width**D, cutoff)
     return _neighbours(source_idxs, target_idxs)
 
 def near_field(scaled, leaves, cutoff):
@@ -250,7 +250,12 @@ def solve(prob, N=4, cutoff=8):
     fs = far_field(ixns, cheb)
     v = values(fs, scaled, leaves, cheb, cutoff)
 
-    return v
+    return aljpy.dotdict(
+        leaves=leaves,
+        ws=ws,
+        ixns=ixns,
+        fs=fs,
+        v=v)
     
 def run():
     prob = test.random_problem(S=100, T=100, D=2)
