@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 def cartesian_product(xs, D):
-    xs = torch.tensor(xs)
+    xs = torch.as_tensor(xs)
     return torch.stack(torch.meshgrid(*((xs,)*D)), -1)
 
 def flat_cartesian_product(xs, D):
@@ -11,15 +11,16 @@ def flat_cartesian_product(xs, D):
 
 class Chebyshev:
     
-    def __init__(self, N, D):
+    def __init__(self, N, D, device=None):
         self.N = N
         self.D = D
         self._nodes = None
+        self.device = device
 
     @property
     def nodes(self):
         if self._nodes is None:
-            ms = torch.arange(self.N)
+            ms = torch.arange(self.N, device=self.device)
             onedim = torch.cos((ms+1/2)*np.pi/self.N)
             self._nodes = flat_cartesian_product(onedim, self.D)
         return self._nodes
@@ -42,7 +43,7 @@ class Chebyshev:
         theta_a = torch.acos(a).reshape(da)
         theta_b = torch.acos(b).reshape(db)
 
-        ks = torch.arange(1, self.N)[None, None, None, :]
+        ks = torch.arange(1, self.N, device=a.device)[None, None, None, :]
         terms = torch.cos(ks*theta_a)*torch.cos(ks*theta_b)
         return (1/self.N + 2/self.N*terms.sum(-1)).prod(-1)
 

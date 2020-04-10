@@ -31,22 +31,16 @@ def accumulate(subscripts, vals, shape):
     return totals.reshape(shape + vals.shape[1:])
 
 def value_counts(subscripts, shape):
-    vals = subscripts.new_ones((len(subscripts),))
+    vals = subscripts.new_ones((len(subscripts),), dtype=torch.int32)
     return accumulate(subscripts, vals, shape)
-
-def leaf_sum(l, x, d):
-    D = l.shape[1]
-    totals = torch.zeros((2**d,)*D + x.shape[1:])
-    totals.index_add(totals, tuple(l.T), x)
-    return totals
 
 def leaf_centers(d):
     return (1/2 + torch.arange(2**d))/2**d
 
 def tree_leaves(scaled, cutoff=5):
     D = scaled.sources.shape[1]
-    sl = torch.zeros((len(scaled.sources), D), dtype=torch.long)
-    tl = torch.zeros((len(scaled.targets), D), dtype=torch.long)
+    sl = torch.zeros_like(scaled.sources, dtype=torch.long)
+    tl = torch.zeros_like(scaled.targets, dtype=torch.long)
 
     #TODO: You can probably get very smart about this and just convert the xs
     # to ints and look at their binary representation.
@@ -57,7 +51,7 @@ def tree_leaves(scaled, cutoff=5):
         if s_done and t_done:
             break
 
-        centers = leaf_centers(d)
+        centers = leaf_centers(d).to(sl.device)
         sl = 2*sl + (scaled.sources >= centers[sl]).long()
         tl = 2*tl + (scaled.targets >= centers[tl]).long()
 
@@ -69,14 +63,16 @@ def tree_leaves(scaled, cutoff=5):
         depth=d)
 
 def uplift_coeffs(cheb):
-    shifts = chebyshev.cartesian_product([-.5, +.5], cheb.D)
+    shifts = torch.tensor([-.5, +.5], device=cheb.device)
+    shifts = chebyshev.cartesian_product(shifts, cheb.D)
     children = shifts[..., None, :] + cheb.nodes/2
     S = cheb.similarity(cheb.nodes, children)
     dims = tuple(range(1, S.ndim-1)) + (0, -1)
     return S.permute(dims)
 
 def pushdown_coeffs(cheb):
-    shifts = chebyshev.cartesian_product([-.5, +.5], cheb.D)
+    shifts = torch.tensor([-.5, +.5], device=cheb.device)
+    shifts = chebyshev.cartesian_product(shifts, cheb.D)
     children = shifts[..., None, :] + cheb.nodes/2
     S = cheb.similarity(children, cheb.nodes)
     return S
@@ -117,8 +113,9 @@ def independent_format(Wpc, D):
     W = W.reshape((2*width,)*D + tail)
     return W
     
-def offset_slices(width, D):
-    for offset in chebyshev.flat_cartesian_product([-1, 0, 1], D):
+def offset_slices(width, D, device=None):
+    offset = torch.tensor([-1, 0, 1], device=device)
+    for offset in chebyshev.flat_cartesian_product(offset, D):
         first = tuple(slice(max( o, 0), min(o+width, width)) for o in offset)
         second = tuple(slice(max(-o, 0), min(-o+width, width)) for o in offset)
         yield offset, first, second
@@ -126,7 +123,8 @@ def offset_slices(width, D):
 def nephew_vectors(offset, cheb):
     D = cheb.D
 
-    pos = chebyshev.cartesian_product([0, 1], D)[..., None, :]
+    pos = torch.tensor([0, 1], device=cheb.device)
+    pos = chebyshev.cartesian_product(pos, D)[..., None, :]
     nodes = pos + (cheb.nodes + 1)/2
 
     child_nodes = nodes[(...,)+(None,)*(D+1)+(slice(None),)]
@@ -157,7 +155,7 @@ def interactions(W, scaled, cheb):
     # Kernel: [(neighbour offset)*D] x (child offset)*D x (child_node) x (nephew offset)*D x (nephew node)
     Wpc = parent_child_format(W, D)
     ixns = torch.zeros_like(Wpc)
-    for offset, fst, snd in offset_slices(width//2, D):
+    for offset, fst, snd in offset_slices(width//2, D, cheb.device):
         node_vecs, pos_vecs = nephew_vectors(offset, cheb)
         K = KERNEL(torch.zeros_like(node_vecs), scaled.scale*node_vecs/width)
         K = torch.where((abs(pos_vecs) <= 1).all(-1), torch.zeros_like(K), K)
@@ -224,7 +222,8 @@ def near_field(scaled, leaves, cutoff):
 
     D = leaves.sources.shape[-1]
     totals = scaled.charges.new_zeros(len(targets))
-    for offset in chebyshev.flat_cartesian_product([-1, 0, +1], D):
+    offsets = torch.tensor([-1, 0, +1], device=sources.device)
+    for offset in chebyshev.flat_cartesian_product(offsets, D):
         offset_sources = leaves.sources + offset
         mask = ((0 <= offset_sources) & (offset_sources < 2**leaves.depth)).all(-1)
         source_idxs, target_idxs = pairs(offset_sources[mask], leaves.targets, leaves.depth, cutoff).T
@@ -243,7 +242,7 @@ def values(fs, scaled, leaves, cheb, cutoff):
     return f + n
 
 def solve(prob, N=4, cutoff=8):
-    cheb = chebyshev.Chebyshev(N, prob.sources.shape[1])
+    cheb = chebyshev.Chebyshev(N, prob.sources.shape[1], 'cuda')
 
     scaled = scale(prob)
     leaves = tree_leaves(scaled, cutoff=cutoff)
