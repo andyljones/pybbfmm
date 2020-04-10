@@ -93,7 +93,7 @@ def weights(scaled, cheb, leaves):
     for d in reversed(range(leaves.depth)):
         exp_dims = sum([(s//2, 2) for s in Ws[-1].shape[:-1]], ())
         W_exp = Ws[-1].reshape(*exp_dims, -1)
-        Ws.append(torch.tensordot(W_exp, coeffs, dims=dot_dims))
+        Ws.append(torch.tensordot(W_exp, coeffs, dot_dims))
     return list(reversed(Ws))
 
 def parent_child_format(W, D):
@@ -101,7 +101,7 @@ def parent_child_format(W, D):
     tail = W.shape[D:]
 
     Wpc = W.reshape((width//2, 2)*D + tail)
-    Wpc = Wpc.transpose(
+    Wpc = Wpc.permute(
         [2*d for d in range(D)] + 
         [2*d+1 for d in range(D)] + 
         [d for d in range(2*D, Wpc.ndim)])
@@ -111,7 +111,7 @@ def independent_format(Wpc, D):
     width = Wpc.shape[0]
     tail = Wpc.shape[2*D:]
 
-    W = Wpc.transpose(
+    W = Wpc.permute(
         sum([[d, D+d] for d in range(D)], []) +
         [d for d in range(2*D, Wpc.ndim)])
     W = W.reshape((2*width,)*D + tail)
@@ -119,7 +119,7 @@ def independent_format(Wpc, D):
     
 def offset_slices(width, D):
     for offset in chebyshev.flat_cartesian_product([-1, 0, 1], D):
-        first = tuple(slice(max(+o, 0), min(o+width, width)) for o in offset)
+        first = tuple(slice(max( o, 0), min(o+width, width)) for o in offset)
         second = tuple(slice(max(-o, 0), min(-o+width, width)) for o in offset)
         yield offset, first, second
 
@@ -143,7 +143,7 @@ def interactions(W, scaled, cheb):
     if isinstance(W, list):
         return [interactions(w, scaled, cheb) for w in W]
     if W.shape[0] == 1:
-        return np.zeros_like(W)
+        return torch.zeros_like(W)
 
     D, N = cheb.D, cheb.N
     width = W.shape[0]
@@ -156,12 +156,12 @@ def interactions(W, scaled, cheb):
     # Output: (parent index)*D x (child offset)*D x (child node)
     # Kernel: [(neighbour offset)*D] x (child offset)*D x (child_node) x (nephew offset)*D x (nephew node)
     Wpc = parent_child_format(W, D)
-    ixns = np.zeros_like(Wpc)
+    ixns = torch.zeros_like(Wpc)
     for offset, fst, snd in offset_slices(width//2, D):
         node_vecs, pos_vecs = nephew_vectors(offset, cheb)
-        K = KERNEL(np.zeros_like(node_vecs), scaled.scale*node_vecs/width)
-        K = np.where((abs(pos_vecs) <= 1).all(-1), 0, K)
-        ixns = jax.ops.index_add(ixns, snd, np.tensordot(Wpc[fst], K, dot_dims))
+        K = KERNEL(torch.zeros_like(node_vecs), scaled.scale*node_vecs/width)
+        K = torch.where((abs(pos_vecs) <= 1).all(-1), torch.zeros_like(K), K)
+        ixns[snd] += torch.tensordot(Wpc[fst], K, dot_dims)
     ixns = independent_format(ixns, D)
 
     return ixns
@@ -171,12 +171,12 @@ def far_field(ixns, cheb):
     fs = [None for _ in ixns]
     fs[0] = ixns[0]
 
-    dot_dims = (D, D+1)
+    dot_dims = ((D,), (D+1,))
     coeffs = pushdown_coeffs(cheb)
     for d in range(1, len(ixns)):
-        pushed = np.tensordot(fs[d-1], coeffs, dot_dims)
+        pushed = torch.tensordot(fs[d-1], coeffs, dot_dims)
         dims = sum([(i, D+i) for i in range(D)], ()) + (2*D,)
-        pushed = pushed.transpose(dims)
+        pushed = pushed.permute(dims)
 
         width = 2*fs[d-1].shape[0]
         pushed = pushed.reshape((width,)*D + (N**D,))
