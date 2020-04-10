@@ -216,23 +216,29 @@ def pairs(leaves, cutoff):
     max_idx = 2**(D*leaves.depth)
 
     source_idxs = linear_index(leaves.sources, leaves.depth)
-    source_counts = value_counts(source_idxs, max_idx)
+    source_order = np.argsort(source_idxs)
+    source_sorted = source_idxs[source_order]
+    source_counts = value_counts(source_sorted, max_idx)
 
     target_idxs = linear_index(leaves.targets, leaves.depth)
-    target_counts = value_counts(target_idxs, max_idx)
+    target_order = np.argsort(target_idxs)
+    target_sorted = target_idxs[target_order]
+    target_counts = value_counts(target_sorted, max_idx)
 
     pairs = []
     for source_count in range(1, cutoff+1):
         for target_count in range(1, cutoff+1):
             mask = (source_counts == source_count) & (target_counts == target_count)
-            s, = mask[source_idxs].nonzero()
-            t, = mask[target_idxs].nonzero()
+            s, = mask[source_sorted].nonzero()
+            t, = mask[target_sorted].nonzero()
 
             ps = np.stack([
-                    np.repeat(s[:, None], target_count, 1).flatten(),
-                    np.repeat(t[None, :], source_count, 0).flatten()], -1)
+                    np.repeat(s.reshape(mask.sum(), source_count, 1), target_count, 2),
+                    np.repeat(t.reshape(mask.sum(), 1, target_count), source_count, 1)], -1).reshape(-1, 2)
             pairs.append(ps)
-    return np.concatenate(pairs)
+    pairs = np.concatenate(pairs)
+    pairs = np.stack([source_order[pairs[..., 0]], target_order[pairs[..., 1]]], -1)
+    return pairs
 
 def neighbours(groups):
     width = groups.sources.shape[0]
