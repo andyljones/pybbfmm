@@ -1,4 +1,5 @@
 import aljpy
+from aljpy import arrdict
 from . import test, chebyshev
 import numpy as np
 import torch
@@ -10,6 +11,7 @@ def limits(prob):
     points = torch.cat([prob.sources, prob.targets])
     return torch.stack([points.min(0).values - EPS, points.max(0).values + EPS])
 
+@test.report_memory
 def scale(prob):
     lims = limits(prob)
     lower, scale = lims[0], lims[1] - lims[0]
@@ -37,6 +39,7 @@ def value_counts(subscripts, shape):
 def leaf_centers(d):
     return (1/2 + torch.arange(2**d))/2**d
 
+@test.report_memory
 def tree_leaves(scaled, cutoff=5):
     D = scaled.sources.shape[1]
     sl = torch.zeros_like(scaled.sources, dtype=torch.long)
@@ -60,7 +63,56 @@ def tree_leaves(scaled, cutoff=5):
     return aljpy.dotdict(
         sources=sl, 
         targets=tl, 
-        depth=d)
+        depth=d,
+        cutoff=cutoff)
+
+def linear_index(subscripts, depth):
+    D = subscripts.shape[-1]
+    bases = (2**depth)**torch.arange(D, device=subscripts.device)
+    linear = (subscripts*bases).sum(-1)
+    return linear
+
+def cohabiting_pairs(sources, targets, depth, cutoff):
+    D = sources.shape[-1]
+    max_idx = 2**(D*depth)
+
+    source_idxs = linear_index(sources, depth)
+    source_order = torch.argsort(source_idxs)
+    source_sorted = source_idxs[source_order]
+    source_counts = value_counts(source_sorted[:, None], (max_idx,))
+
+    target_idxs = linear_index(targets, depth)
+    target_order = torch.argsort(target_idxs)
+    target_sorted = target_idxs[target_order]
+    target_counts = value_counts(target_sorted[:, None], (max_idx,))
+
+    pairs = []
+    for source_count in range(1, cutoff+1):
+        for target_count in range(1, cutoff+1):
+            mask = (source_counts == source_count) & (target_counts == target_count)
+            s = mask[source_sorted].nonzero()
+            t = mask[target_sorted].nonzero()
+
+            ps = torch.stack([
+                    torch.repeat_interleave(s.reshape(mask.sum(), source_count, 1), target_count, 2),
+                    torch.repeat_interleave(t.reshape(mask.sum(), 1, target_count), source_count, 1)], -1).reshape(-1, 2)
+            pairs.append(ps)
+    pairs = torch.cat(pairs)
+    pairs = torch.stack([source_order[pairs[..., 0]], target_order[pairs[..., 1]]], -1)
+    return pairs
+
+def neighbouring_pairs(leaves):
+    D = leaves.sources.shape[-1]
+    pairs = []
+    offsets = torch.tensor([-1, 0, +1], device=leaves.sources.device)
+    for offset in chebyshev.flat_cartesian_product(offsets, D):
+        offset_sources = leaves.sources + offset
+        mask = ((0 <= offset_sources) & (offset_sources < 2**leaves.depth)).all(-1)
+        masked_pairs = cohabiting_pairs(offset_sources[mask], leaves.targets, leaves.depth, leaves.cutoff)
+        pairs.append(torch.stack([
+            mask.nonzero()[:, 0][masked_pairs[..., 0]],
+            masked_pairs[..., 1]], -1))
+    return torch.cat(pairs)
 
 def uplift_coeffs(cheb):
     shifts = torch.tensor([-.5, +.5], device=cheb.device)
@@ -77,6 +129,7 @@ def pushdown_coeffs(cheb):
     S = cheb.similarity(children, cheb.nodes)
     return S
 
+@test.report_memory
 def weights(scaled, cheb, leaves):
     loc = scaled.sources * 2**leaves.depth - leaves.sources
     S = cheb.similarity(2*loc-1, cheb.nodes)
@@ -137,6 +190,7 @@ def nephew_vectors(offset, cheb):
 
     return node_vectors, pos_vectors
 
+@test.report_memory
 def interactions(W, scaled, cheb):
     if isinstance(W, list):
         return [interactions(w, scaled, cheb) for w in W]
@@ -164,6 +218,7 @@ def interactions(W, scaled, cheb):
 
     return ixns
 
+@test.report_memory
 def far_field(ixns, cheb):
     N, D = cheb.N, cheb.D
     fs = [None for _ in ixns]
@@ -182,95 +237,64 @@ def far_field(ixns, cheb):
         fs[d] = pushed + ixns[d]
     return fs
 
-def linear_index(subscripts, depth):
-    D = subscripts.shape[-1]
-    bases = (2**depth)**torch.arange(D, device=subscripts.device)
-    linear = (subscripts*bases).sum(-1)
-    return linear
-
-def pairs(sources, targets, depth, cutoff):
-    D = sources.shape[-1]
-    max_idx = 2**(D*depth)
-
-    source_idxs = linear_index(sources, depth)
-    source_order = torch.argsort(source_idxs)
-    source_sorted = source_idxs[source_order]
-    source_counts = value_counts(source_sorted[:, None], (max_idx,))
-
-    target_idxs = linear_index(targets, depth)
-    target_order = torch.argsort(target_idxs)
-    target_sorted = target_idxs[target_order]
-    target_counts = value_counts(target_sorted[:, None], (max_idx,))
-
-    pairs = []
-    for source_count in range(1, cutoff+1):
-        for target_count in range(1, cutoff+1):
-            mask = (source_counts == source_count) & (target_counts == target_count)
-            s = mask[source_sorted].nonzero()
-            t = mask[target_sorted].nonzero()
-
-            ps = torch.stack([
-                    torch.repeat_interleave(s.reshape(mask.sum(), source_count, 1), target_count, 2),
-                    torch.repeat_interleave(t.reshape(mask.sum(), 1, target_count), source_count, 1)], -1).reshape(-1, 2)
-            pairs.append(ps)
-    pairs = torch.cat(pairs)
-    pairs = torch.stack([source_order[pairs[..., 0]], target_order[pairs[..., 1]]], -1)
-    return pairs
-
-def near_field(scaled, leaves, cutoff):
-    sources, targets = scaled.scale*scaled.sources, scaled.scale*scaled.targets
-
-    D = leaves.sources.shape[-1]
-    totals = scaled.charges.new_zeros(len(targets))
-    offsets = torch.tensor([-1, 0, +1], device=sources.device)
-    for offset in chebyshev.flat_cartesian_product(offsets, D):
-        offset_sources = leaves.sources + offset
-        mask = ((0 <= offset_sources) & (offset_sources < 2**leaves.depth)).all(-1)
-        source_idxs, target_idxs = pairs(offset_sources[mask], leaves.targets, leaves.depth, cutoff).T
-        K = KERNEL(sources[mask][source_idxs], targets[target_idxs])
-        totals.index_add_(0, target_idxs, K*scaled.charges[mask][source_idxs])
-
-    return totals
-
-def values(fs, scaled, leaves, cheb, cutoff):
-    n = near_field(scaled, leaves, cutoff)
-
+@test.report_memory
+def target_far_field(fs, scaled, leaves, cheb):
     loc = scaled.targets * 2**leaves.depth - leaves.targets
     S = cheb.similarity(2*loc-1, cheb.nodes)
     f = (S*fs[-1][tuple(leaves.targets.T)]).sum(-1)
-    
-    return f + n
+    return f
 
-def solve(prob, N=4, cutoff=8):
-    cheb = chebyshev.Chebyshev(N, prob.sources.shape[1], 'cuda')
 
-    scaled = scale(prob)
-    leaves = tree_leaves(scaled, cutoff=cutoff)
+@test.report_memory
+def near_field(scaled, pairs):
+    source_idxs, target_idxs = pairs.T
+    sources = (scaled.scale*scaled.sources)[source_idxs]
+    targets = (scaled.scale*scaled.targets)[target_idxs]
+    charges = scaled.charges[source_idxs]
 
-    ws = weights(scaled, cheb, leaves)
-    ixns = interactions(ws, scaled, cheb)
-    fs = far_field(ixns, cheb)
-    v = values(fs, scaled, leaves, cheb, cutoff)
+    totals = scaled.charges.new_zeros(len(scaled.targets))
+    totals.index_add_(0, target_idxs, KERNEL(sources, targets)*charges)
 
-    return aljpy.dotdict(
-        leaves=leaves,
+    return totals
+
+@test.report_memory
+def prepare(prob, N=4, cutoff=8):
+    r = aljpy.dotdict()
+    D = prob.sources.shape[1]
+    r['cheb'] = chebyshev.Chebyshev(N, D, prob.sources.device)
+    r['scaled'] = scale(prob)
+    r['leaves'] = tree_leaves(r.scaled, cutoff)
+    r['pairs'] = neighbouring_pairs(r.leaves)
+    return r
+
+@test.report_memory
+def solve(prob, prep=None, **kwargs):
+    prep = prepare(prob) if prep is None else prep
+
+    ws = weights(prep.scaled, prep.cheb, prep.leaves)
+    ixns = interactions(ws, prep.scaled, prep.cheb)
+    fs = far_field(ixns, prep.cheb)
+    f = target_far_field(fs, prep.scaled, prep.leaves, prep.cheb)
+    n = near_field(prep.scaled, prep.pairs)
+    v = f + n
+
+    return arrdict.arrdict(
         ws=ws,
         ixns=ixns,
         fs=fs,
-        v=v)
+        v=v).cpu().numpy()
 
 def run():
     prob = test.random_problem(S=100, T=100, D=2)
     soln = solve(prob)
 
-def benchmark(maxsize=1e6, repeats=5):
+def benchmark(maxsize=5e6, repeats=5):
     import pandas as pd
 
     result = {}
     for N in np.logspace(1, np.log10(maxsize), 10, dtype=int):
         print(f'Timing {N}')
         for r in range(repeats):
-            # Get JAX to compile
             prob = test.random_problem(S=N, T=N, D=2)
             solve(prob)
             with aljpy.timer() as bbfmm:
