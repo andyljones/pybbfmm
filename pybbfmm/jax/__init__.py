@@ -33,6 +33,7 @@ def leaf_centers(d):
     return (1/2 + np.arange(2**d))/2**d
 
 def tree_leaves(scaled, cutoff=5):
+    assert cutoff < 64, 'Cutoff needs to fit in a uint8, aka <256'
     D = scaled.sources.shape[1]
     sl = np.zeros((len(scaled.sources), D), dtype=np.int32)
     tl = np.zeros((len(scaled.targets), D), dtype=np.int32)
@@ -260,10 +261,10 @@ def benchmark(maxsize=1e6, repeats=5):
     import pandas as pd
 
     result = {}
-    for N in np.logspace(1, np.log10(maxsize), 50, dtype=int):
+    for N in np.logspace(1, np.log10(maxsize), 10, dtype=int):
         print(f'Timing {N}')
-        # Get JAX to compile
         for r in range(repeats):
+            # Get JAX to compile
             prob = test.random_problem(S=N, T=N, D=2)
             solve(prob)
             with aljpy.timer() as bbfmm:
