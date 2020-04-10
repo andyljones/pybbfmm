@@ -30,7 +30,7 @@ def accumulate(subscripts, vals, shape):
 
     return totals.reshape(shape + vals.shape[1:])
 
-def count(subscripts, shape):
+def value_counts(subscripts, shape):
     vals = subscripts.new_ones((len(subscripts),))
     return accumulate(subscripts, vals, shape)
 
@@ -52,8 +52,8 @@ def tree_leaves(scaled, cutoff=5):
     # to ints and look at their binary representation.
     d = 0
     while True:
-        s_done = count(sl, (2**d,)*D).max() <= cutoff
-        t_done = count(tl, (2**d,)*D).max() <= cutoff
+        s_done = value_counts(sl, (2**d,)*D).max() <= cutoff
+        t_done = value_counts(tl, (2**d,)*D).max() <= cutoff
         if s_done and t_done:
             break
 
@@ -186,54 +186,50 @@ def far_field(ixns, cheb):
 
 def linear_index(subscripts, depth):
     D = subscripts.shape[-1]
-    bases = (2**depth)**np.arange(D)
+    bases = (2**depth)**torch.arange(D, device=subscripts.device)
     linear = (subscripts*bases).sum(-1)
     return linear
-
-def value_counts(idxs, max_idx):
-    counts = np.zeros((max_idx,), dtype=np.int32)
-    return jax.ops.index_add(counts, idxs, 1)
 
 def pairs(sources, targets, depth, cutoff):
     D = sources.shape[-1]
     max_idx = 2**(D*depth)
 
     source_idxs = linear_index(sources, depth)
-    source_order = np.argsort(source_idxs)
+    source_order = torch.argsort(source_idxs)
     source_sorted = source_idxs[source_order]
-    source_counts = value_counts(source_sorted, max_idx)
+    source_counts = value_counts(source_sorted[:, None], (max_idx,))
 
     target_idxs = linear_index(targets, depth)
-    target_order = np.argsort(target_idxs)
+    target_order = torch.argsort(target_idxs)
     target_sorted = target_idxs[target_order]
-    target_counts = value_counts(target_sorted, max_idx)
+    target_counts = value_counts(target_sorted[:, None], (max_idx,))
 
     pairs = []
     for source_count in range(1, cutoff+1):
         for target_count in range(1, cutoff+1):
             mask = (source_counts == source_count) & (target_counts == target_count)
-            s, = mask[source_sorted].nonzero()
-            t, = mask[target_sorted].nonzero()
+            s = mask[source_sorted].nonzero()
+            t = mask[target_sorted].nonzero()
 
-            ps = np.stack([
-                    np.repeat(s.reshape(mask.sum(), source_count, 1), target_count, 2),
-                    np.repeat(t.reshape(mask.sum(), 1, target_count), source_count, 1)], -1).reshape(-1, 2)
+            ps = torch.stack([
+                    torch.repeat_interleave(s.reshape(mask.sum(), source_count, 1), target_count, 2),
+                    torch.repeat_interleave(t.reshape(mask.sum(), 1, target_count), source_count, 1)], -1).reshape(-1, 2)
             pairs.append(ps)
-    pairs = np.concatenate(pairs)
-    pairs = np.stack([source_order[pairs[..., 0]], target_order[pairs[..., 1]]], -1)
+    pairs = torch.cat(pairs)
+    pairs = torch.stack([source_order[pairs[..., 0]], target_order[pairs[..., 1]]], -1)
     return pairs
 
 def near_field(scaled, leaves, cutoff):
     sources, targets = scaled.scale*scaled.sources, scaled.scale*scaled.targets
 
     D = leaves.sources.shape[-1]
-    totals = np.zeros(len(targets))
+    totals = scaled.charges.new_zeros(len(targets))
     for offset in chebyshev.flat_cartesian_product([-1, 0, +1], D):
         offset_sources = leaves.sources + offset
         mask = ((0 <= offset_sources) & (offset_sources < 2**leaves.depth)).all(-1)
         source_idxs, target_idxs = pairs(offset_sources[mask], leaves.targets, leaves.depth, cutoff).T
         K = KERNEL(sources[mask][source_idxs], targets[target_idxs])
-        totals = jax.ops.index_add(totals, target_idxs, K*scaled.charges[mask][source_idxs])
+        totals[target_idxs] += K*scaled.charges[mask][source_idxs]
 
     return totals
 
