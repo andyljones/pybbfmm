@@ -28,9 +28,17 @@ def report_memory(f):
     
     return g
 
-def memory():
+def memory_report():
     import pandas as pd
     global REPORT_MEMORY
     report = REPORT_MEMORY.copy()
     REPORT_MEMORY = []
     return pd.DataFrame(report, columns=['name', 'size'])
+
+def memory_usage(d):
+    if isinstance(d, dict):
+        return type(d)({k: memory_usage(v) for k, v in d.items()})
+    if isinstance(d, list):
+        return np.array([memory_usage(x) for x in d])
+    if isinstance(d, torch.Tensor):
+        return d.nelement()*d.element_size()/1e6

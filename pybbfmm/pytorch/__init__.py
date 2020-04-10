@@ -278,11 +278,7 @@ def solve(prob, prep=None, **kwargs):
     n = near_field(prep.scaled, prep.pairs)
     v = f + n
 
-    return arrdict.arrdict(
-        ws=ws,
-        ixns=ixns,
-        fs=fs,
-        v=v).cpu().numpy()
+    return v.cpu().numpy()
 
 def run():
     prob = test.random_problem(S=100, T=100, D=2)
