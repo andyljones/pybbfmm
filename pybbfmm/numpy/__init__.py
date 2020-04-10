@@ -233,11 +233,13 @@ def near_field(scaled, leaves, cutoff):
     return totals
 
 def values(fs, scaled, leaves, cheb, cutoff):
+    n = near_field(scaled, leaves, cutoff)
+
     loc = scaled.targets * 2**leaves.depth - leaves.targets
     S = cheb.similarity(2*loc-1, cheb.nodes)
     f = (S*fs[-1][tuple(leaves.targets.T)]).sum(-1)
     
-    return f + near_field(scaled, leaves, cutoff)
+    return f + n
 
 def solve(prob, N=4, cutoff=8):
     cheb = chebyshev.Chebyshev(N, prob.sources.shape[1])

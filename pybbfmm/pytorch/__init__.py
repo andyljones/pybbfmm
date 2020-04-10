@@ -229,7 +229,7 @@ def near_field(scaled, leaves, cutoff):
         mask = ((0 <= offset_sources) & (offset_sources < 2**leaves.depth)).all(-1)
         source_idxs, target_idxs = pairs(offset_sources[mask], leaves.targets, leaves.depth, cutoff).T
         K = KERNEL(sources[mask][source_idxs], targets[target_idxs])
-        totals[target_idxs] += K*scaled.charges[mask][source_idxs]
+        totals.index_add_(0, target_idxs, K*scaled.charges[mask][source_idxs])
 
     return totals
 
