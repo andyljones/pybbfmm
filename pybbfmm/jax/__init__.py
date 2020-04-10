@@ -178,49 +178,20 @@ def linear_index(subscripts, depth):
     linear = (subscripts*bases).sum(-1)
     return linear
 
-def repeats(linear):
-    argsort = np.argsort(linear)
-    ordered = linear[argsort]
-    last  = np.concatenate([ordered[1:] != ordered[:-1], np.array([True])])
-    cum_replicas = np.concatenate([
-        np.asarray([-1,]),
-        np.arange(len(linear))[last]])
-    n_replicas = np.diff(cum_replicas)
-
-    steps = np.ones(len(linear)-1, dtype=n_replicas.dtype)
-    steps = jax.ops.index_add(steps, last[:-1], -n_replicas[:-1])
-    steps = np.concatenate([np.array([0]), steps])
-    ordered_index = np.cumsum(steps)
-
-    counts = np.empty_like(ordered_index)
-    counts = jax.ops.index_update(counts, argsort, ordered_index)
-
-    return counts
-
-def group(leaves, depth, cutoff):
-    linear = linear_index(leaves, depth)
-    reps = repeats(linear)
-
-    D = leaves.shape[-1]
-    indices = np.full((2**(depth*D), cutoff), -1)
-    indices = jax.ops.index_update(indices, (linear, reps), np.arange(len(linear)))
-
-    return indices.reshape((2**depth,)*D + (cutoff,))
-
 def value_counts(idxs, max_idx):
     counts = np.zeros((max_idx,), dtype=np.int32)
     return jax.ops.index_add(counts, idxs, 1)
 
-def pairs(leaves, cutoff):
-    D = leaves.sources.shape[-1]
-    max_idx = 2**(D*leaves.depth)
+def pairs(sources, targets, depth, cutoff):
+    D = sources.shape[-1]
+    max_idx = 2**(D*depth)
 
-    source_idxs = linear_index(leaves.sources, leaves.depth)
+    source_idxs = linear_index(sources, depth)
     source_order = np.argsort(source_idxs)
     source_sorted = source_idxs[source_order]
     source_counts = value_counts(source_sorted, max_idx)
 
-    target_idxs = linear_index(leaves.targets, leaves.depth)
+    target_idxs = linear_index(targets, depth)
     target_order = np.argsort(target_idxs)
     target_sorted = target_idxs[target_order]
     target_counts = value_counts(target_sorted, max_idx)
@@ -240,32 +211,17 @@ def pairs(leaves, cutoff):
     pairs = np.stack([source_order[pairs[..., 0]], target_order[pairs[..., 1]]], -1)
     return pairs
 
-def neighbours(groups):
-    width = groups.sources.shape[0]
-    cutoff = groups.sources.shape[-1]
-    D = groups.sources.ndim-1
-    for offset, fst, snd in offset_slices(width, D):
-        neighbours = np.full((width,)*D + (cutoff,), -1)
-        neighbours = jax.ops.index_update(neighbours, snd, groups.sources[fst])
-        source_idxs = neighbours.reshape(width**D, cutoff)
-        target_idxs = groups.targets.reshape(width**D, cutoff)
-
-        pairs = np.stack([
-            np.repeat(source_idxs[..., None, :], cutoff, -2),
-            np.repeat(target_idxs[..., :, None], cutoff, -1)], -1)
-        yield pairs[(pairs > -1).all(-1)].T
-
 def near_field(scaled, leaves, cutoff):
     sources, targets = scaled.scale*scaled.sources, scaled.scale*scaled.targets
 
-    groups = aljpy.dotdict(
-        sources=group(leaves.sources, leaves.depth, cutoff),
-        targets=group(leaves.targets, leaves.depth, cutoff))
-
+    D = leaves.sources.shape[-1]
     totals = np.zeros(len(targets))
-    for source_idxs, target_idxs in neighbours(groups):
-        K = KERNEL(sources[source_idxs], targets[target_idxs])
-        totals = jax.ops.index_add(totals, target_idxs, K*scaled.charges[source_idxs])
+    for offset in chebyshev.flat_cartesian_product([-1, 0, +1], D):
+        offset_sources = leaves.sources + offset
+        mask = ((0 <= offset_sources) & (offset_sources < 2**leaves.depth)).all(-1)
+        source_idxs, target_idxs = pairs(offset_sources[mask], leaves.targets, leaves.depth, cutoff).T
+        K = KERNEL(sources[mask][source_idxs], targets[target_idxs])
+        totals = jax.ops.index_add(totals, target_idxs, K*scaled.charges[mask][source_idxs])
 
     return totals
 
@@ -283,7 +239,6 @@ def solve(prob, N=4, cutoff=8):
 
     scaled = scale(prob)
     leaves = tree_leaves(scaled, cutoff=cutoff)
-    import aljpy; aljpy.extract()
 
     ws = weights(scaled, cheb, leaves)
     ixns = interactions(ws, scaled, cheb)
