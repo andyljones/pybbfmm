@@ -178,7 +178,7 @@ def linear_index(subscripts, depth):
     linear = (subscripts*bases).sum(-1)
     return linear
 
-def counts_of(linear):
+def repeats(linear):
     argsort = np.argsort(linear)
     ordered = linear[argsort]
     last  = np.concatenate([ordered[1:] != ordered[:-1], np.array([True])])
@@ -199,13 +199,40 @@ def counts_of(linear):
 
 def group(leaves, depth, cutoff):
     linear = linear_index(leaves, depth)
-    counts = counts_of(linear)
+    reps = repeats(linear)
 
     D = leaves.shape[-1]
     indices = np.full((2**(depth*D), cutoff), -1)
-    indices = jax.ops.index_update(indices, (linear, counts), np.arange(len(linear)))
+    indices = jax.ops.index_update(indices, (linear, reps), np.arange(len(linear)))
 
     return indices.reshape((2**depth,)*D + (cutoff,))
+
+def value_counts(idxs, max_idx):
+    counts = np.zeros((max_idx,), dtype=np.int32)
+    return jax.ops.index_add(counts, idxs, 1)
+
+def pairs(leaves, cutoff):
+    D = leaves.sources.shape[-1]
+    max_idx = 2**(D*leaves.depth)
+
+    source_idxs = linear_index(leaves.sources, leaves.depth)
+    source_counts = value_counts(source_idxs, max_idx)
+
+    target_idxs = linear_index(leaves.targets, leaves.depth)
+    target_counts = value_counts(target_idxs, max_idx)
+
+    pairs = []
+    for source_count in range(1, cutoff+1):
+        for target_count in range(1, cutoff+1):
+            mask = (source_counts == source_count) & (target_counts == target_count)
+            s, = mask[source_idxs].nonzero()
+            t, = mask[target_idxs].nonzero()
+
+            ps = np.stack([
+                    np.repeat(s[:, None], target_count, 1).flatten(),
+                    np.repeat(t[None, :], source_count, 0).flatten()], -1)
+            pairs.append(ps)
+    return np.concatenate(pairs)
 
 def neighbours(groups):
     width = groups.sources.shape[0]
@@ -250,6 +277,7 @@ def solve(prob, N=4, cutoff=8):
 
     scaled = scale(prob)
     leaves = tree_leaves(scaled, cutoff=cutoff)
+    import aljpy; aljpy.extract()
 
     ws = weights(scaled, cheb, leaves)
     ixns = interactions(ws, scaled, cheb)
