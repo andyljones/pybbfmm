@@ -12,6 +12,7 @@ def limits(prob):
     return torch.stack([points.min(0).values - EPS, points.max(0).values + EPS])
 
 @test.report_memory
+@torch.no_grad()
 def scale(prob):
     lims = limits(prob)
     lower, scale = lims[0], lims[1] - lims[0]
@@ -40,6 +41,7 @@ def leaf_centers(d):
     return (1/2 + torch.arange(2**d))/2**d
 
 @test.report_memory
+@torch.no_grad()
 def tree_leaves(scaled, cutoff=5):
     D = scaled.sources.shape[1]
     sl = torch.zeros_like(scaled.sources, dtype=torch.long)
@@ -130,6 +132,7 @@ def pushdown_coeffs(cheb):
     return S
 
 @test.report_memory
+@torch.no_grad()
 def weights(scaled, cheb, leaves):
     loc = scaled.sources * 2**leaves.depth - leaves.sources
     S = cheb.similarity(2*loc-1, cheb.nodes)
@@ -191,6 +194,7 @@ def nephew_vectors(offset, cheb):
     return node_vectors, pos_vectors
 
 @test.report_memory
+@torch.no_grad()
 def interactions(W, scaled, cheb):
     if isinstance(W, list):
         return [interactions(w, scaled, cheb) for w in W]
@@ -219,6 +223,7 @@ def interactions(W, scaled, cheb):
     return ixns
 
 @test.report_memory
+@torch.no_grad()
 def far_field(ixns, cheb):
     N, D = cheb.N, cheb.D
     fs = [None for _ in ixns]
@@ -238,6 +243,7 @@ def far_field(ixns, cheb):
     return fs
 
 @test.report_memory
+@torch.no_grad()
 def target_far_field(fs, scaled, leaves, cheb):
     loc = scaled.targets * 2**leaves.depth - leaves.targets
     S = cheb.similarity(2*loc-1, cheb.nodes)
@@ -246,6 +252,7 @@ def target_far_field(fs, scaled, leaves, cheb):
 
 
 @test.report_memory
+@torch.no_grad()
 def near_field(scaled, pairs):
     source_idxs, target_idxs = pairs.T
     sources = (scaled.scale*scaled.sources)[source_idxs]
@@ -258,6 +265,7 @@ def near_field(scaled, pairs):
     return totals
 
 @test.report_memory
+@torch.no_grad()
 def prepare(prob, N=4, cutoff=8):
     r = aljpy.dotdict()
     D = prob.sources.shape[1]
@@ -268,6 +276,7 @@ def prepare(prob, N=4, cutoff=8):
     return r
 
 @test.report_memory
+@torch.no_grad()
 def solve(prob, prep=None, **kwargs):
     prep = prepare(prob) if prep is None else prep
 

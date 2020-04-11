@@ -42,3 +42,26 @@ def memory_usage(d):
         return np.array([memory_usage(x) for x in d])
     if isinstance(d, torch.Tensor):
         return d.nelement()*d.element_size()/1e6
+
+def plot_occupancy(D, cutoff, depths=30):
+    qs = {}
+    for M in np.logspace(1, np.log10(100e6), 500):
+        depths = np.arange(depths)
+        occ = 0.
+        prev_p = 0.
+        for depth in depths:
+            cells = 2**(depth*D)
+            mu = M/cells
+            p_cell_full = 1 - sp.stats.poisson(mu=mu).cdf(cutoff)
+            p_one_sufficient = (1 - p_cell_full)**cells
+            p_both_sufficient = 1 - (1 - p_one_sufficient)**2
+            occ += (p_both_sufficient - prev_p)*mu/cutoff
+            prev_p = p_both_sufficient
+        qs[M] = occ
+    qs = pd.Series(qs)
+
+    ax = qs.plot(logx=True)
+    ax.set_xlim(10**3, qs.index[-1])
+    ax.set_ylim(0, .25)
+    ax.grid(True)
+    ax.set_title(f'Occupancy, cutoff={cutoff}, D={D}')

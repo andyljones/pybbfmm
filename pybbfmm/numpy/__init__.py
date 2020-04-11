@@ -260,11 +260,12 @@ def solve(prob, N=4, cutoff=8):
         v=v)
     
 def run():
-    prob = test.random_problem(S=100, T=100, D=2)
+    M = int(1e2)
+    prob = test.random_problem(S=M, T=M, D=2)
 
     v = solve(prob)
 
-    np.testing.assert_allclose(v, test.solve(prob))
+    np.testing.assert_allclose(v, test.solve(prob).cpu().numpy())
 
 def benchmark_both(maxsize=50e3, repeats=5):
     import pandas as pd
