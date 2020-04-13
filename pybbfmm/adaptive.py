@@ -3,6 +3,8 @@ from aljpy import arrdict
 from . import test, chebyshev
 import numpy as np
 import torch
+import matplotlib.pyplot as plt
+import matplotlib as mpl
 
 KERNEL = test.quad_kernel
 EPS = 1e-2
@@ -34,53 +36,79 @@ def value_counts(indices, length):
 def tree_nodes(scaled, cutoff=5):
     #TODO: Well this is a travesty of incomprehensibility. Verify it then explain yourself.
     D = scaled.sources.shape[1]
-    cutoff = 5
 
     points = torch.cat([scaled.sources, scaled.targets])
-    leaves = points.new_zeros((len(points),), dtype=torch.long)
+    indices = points.new_zeros((len(points),), dtype=torch.long)
 
     tree = arrdict.arrdict(
-        parents=leaves.new_full((1,), 0),
-        depths=leaves.new_zeros((1,)),
+        parents=indices.new_full((1,), 0),
+        depths=indices.new_zeros((1,)),
         centers=points.new_zeros((1, D)),
-        terminal=leaves.new_ones((1,), dtype=torch.bool),
-        children=leaves.new_full((1,) + (2,)*D, -1))
+        terminal=indices.new_ones((1,), dtype=torch.bool),
+        children=indices.new_full((1,) + (2,)*D, -1))
 
-    bases = 2**torch.arange(D, device=leaves.device)
-    subscript_offsets = chebyshev.cartesian_product(torch.tensor([0, 1], device=leaves.device), D)
-    center_offsets = chebyshev.cartesian_product(torch.tensor([-1., +1.], device=leaves.device), D)
+    bases = 2**torch.arange(D, device=indices.device)
+    subscript_offsets = chebyshev.cartesian_product(torch.tensor([0, 1], device=indices.device), D)
+    center_offsets = chebyshev.flat_cartesian_product(torch.tensor([-1., +1.], device=indices.device), D)
 
     depth = 0
     while True:
-        nodes, inv, counts = torch.unique(leaves, return_inverse=True, return_counts=True)
-        tree.terminal[nodes] = (counts <= cutoff)
+        used, used_inv, counts = torch.unique(indices, return_inverse=True, return_counts=True)
+        tree.terminal[used] = (counts <= cutoff)
         
-        node_active = ~tree.terminal[nodes]
-        point_active = node_active[inv]
+        used_active = ~tree.terminal[used]
+        point_active = used_active[used_inv]
         if not point_active.any():
             break
 
         depth += 1
         
-        parents = nodes[node_active]
-        active_inv = (node_active.cumsum(0) - node_active.long())[inv[point_active]]
-        zeroth_child = len(tree.parents) + 2**D*torch.arange(len(parents), device=parents.device)
-        point_offset = ((points[point_active] >= tree.centers[parents][active_inv])*bases).sum(-1)
-        child = zeroth_child[active_inv] + point_offset
-        leaves[point_active] = child
+        active = used[used_active]
+        active_inv = (used_active.cumsum(0) - used_active.long())[used_inv[point_active]]
+        first_child = len(tree.parents) + 2**D*torch.arange(len(active), device=active.device)
+        point_offset = ((points[point_active] >= tree.centers[active][active_inv])*bases).sum(-1)
+        child_node = first_child[active_inv] + point_offset
+        indices[point_active] = child_node
 
-        tree.children[parents] = zeroth_child[(slice(None),) + (None,)*D] + (subscript_offsets*bases).sum(-1)
+        tree.children[active] = first_child[(slice(None),) + (None,)*D] + (subscript_offsets*bases).sum(-1)
 
-        centers = tree.centers[parents][(slice(None),) + (None,)*D] + center_offsets/2**depth
-        centers = centers.reshape(-1, D)
+        centers = tree.centers[active][(slice(None),) + (None,)*D] + center_offsets/2**depth
 
         children = arrdict.arrdict(
-            parents=parents.repeat_interleave(2**D),
+            parents=active.repeat_interleave(2**D),
             depths=tree.depths.new_full((len(centers),), depth),
             centers=centers,
             terminal=tree.terminal.new_ones((len(centers),)),
             children=tree.children.new_full((len(centers),) + (2,)*D, -1))
         tree = arrdict.cat([tree, children])
-        return tree, leaves
 
+        return tree, indices
 
+def plot_tree(tree, ax=None):
+    tree = tree.cpu().numpy()
+
+    fig, ax = plt.subplots() if ax is None else (ax.figure, ax)
+    ax.set_xlim(-1.1, +1.1)
+    ax.set_ylim(-1.1, +1.1)
+
+    for depth in np.unique(tree.depths):
+        level = tree[tree.depths == depth]
+
+        width = 2/2**depth
+        corners = level.centers - np.array([1, 1])*width/2
+
+        for corner in corners:
+            ax.add_artist(mpl.patches.Rectangle(corner, width, width, color='k', fill=False))
+            
+    return ax
+
+def plot_problem(prob, q=.01, ax=None):
+    prob = prob.cpu().numpy()
+    fig, ax = plt.subplots() if ax is None else (ax.figure, ax)
+
+    ax.scatter(*prob.targets.T, color='C0', label='targets', marker='.')
+
+    charges = (prob.charges - prob.charges.min())/(prob.charges.max() - prob.charges.min())
+    ax.scatter(*prob.sources.T, color='red', s=10 + 100*charges, label='sources', marker='x')
+
+    return ax
