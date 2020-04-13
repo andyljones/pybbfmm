@@ -34,6 +34,8 @@ def value_counts(indices, length):
 def tree_nodes(scaled, cutoff=5):
     #TODO: Well this is a travesty of incomprehensibility. Verify it then explain yourself.
     D = scaled.sources.shape[1]
+    cutoff = 5
+
     points = torch.cat([scaled.sources, scaled.targets])
     leaves = points.new_zeros((len(points),), dtype=torch.long)
 
@@ -61,14 +63,15 @@ def tree_nodes(scaled, cutoff=5):
         depth += 1
         
         parents = nodes[node_active]
+        active_inv = (node_active.cumsum(0) - node_active.long())[inv[point_active]]
         zeroth_child = len(tree.parents) + 2**D*torch.arange(len(parents), device=parents.device)
-        point_offset = ((points[point_active] >= tree.centers[parents][inv[point_active]])*bases).sum(-1)
-        child = zeroth_child + point_offset
+        point_offset = ((points[point_active] >= tree.centers[parents][active_inv])*bases).sum(-1)
+        child = zeroth_child[active_inv] + point_offset
         leaves[point_active] = child
 
-        tree.children[parents] = zeroth_child[:, None] + (subscript_offsets*bases).sum(-1)
+        tree.children[parents] = zeroth_child[(slice(None),) + (None,)*D] + (subscript_offsets*bases).sum(-1)
 
-        centers = tree.centers[parents][:, None] + center_offsets/2**depth
+        centers = tree.centers[parents][(slice(None),) + (None,)*D] + center_offsets/2**depth
         centers = centers.reshape(-1, D)
 
         children = arrdict.arrdict(
@@ -78,7 +81,6 @@ def tree_nodes(scaled, cutoff=5):
             terminal=tree.terminal.new_ones((len(centers),)),
             children=tree.children.new_full((len(centers),) + (2,)*D, -1))
         tree = arrdict.cat([tree, children])
-
-    return tree, leaves
+        return tree, leaves
 
 
