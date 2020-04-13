@@ -11,8 +11,6 @@ def limits(prob):
     points = torch.cat([prob.sources, prob.targets])
     return torch.stack([points.min(0).values - EPS, points.max(0).values + EPS])
 
-@test.report_memory
-@torch.no_grad()
 def scale(prob):
     lims = limits(prob)
     lower, scale = lims[0], lims[1] - lims[0]
@@ -41,7 +39,6 @@ def leaf_centers(d):
     return (1/2 + torch.arange(2**d))/2**d
 
 @test.report_memory
-@torch.no_grad()
 def tree_leaves(scaled, cutoff=5):
     D = scaled.sources.shape[1]
     sl = torch.zeros_like(scaled.sources, dtype=torch.long)
@@ -132,7 +129,6 @@ def pushdown_coeffs(cheb):
     return S
 
 @test.report_memory
-@torch.no_grad()
 def weights(scaled, cheb, leaves):
     loc = scaled.sources * 2**leaves.depth - leaves.sources
     S = cheb.similarity(2*loc-1, cheb.nodes)
