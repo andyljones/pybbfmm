@@ -91,6 +91,7 @@ def plot_tree(tree, ax=None):
     fig, ax = plt.subplots() if ax is None else (ax.figure, ax)
     ax.set_xlim(-1.1, +1.1)
     ax.set_ylim(-1.1, +1.1)
+    ax.set_aspect(1)
 
     for depth in np.unique(tree.depths):
         level = tree[tree.depths == depth]
@@ -106,6 +107,7 @@ def plot_tree(tree, ax=None):
 def plot_problem(prob, q=.01, ax=None):
     prob = prob.cpu().numpy()
     fig, ax = plt.subplots() if ax is None else (ax.figure, ax)
+    ax.set_aspect(1)
 
     ax.scatter(*prob.targets.T, color='C0', label='targets', marker='.')
 
