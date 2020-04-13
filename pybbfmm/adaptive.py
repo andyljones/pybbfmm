@@ -33,7 +33,7 @@ def value_counts(indices, length):
     vals = indices.new_ones((len(indices),), dtype=torch.int32)
     return accumulate(indices, vals, length)
 
-def tree_nodes(scaled, cutoff=5):
+def tree_indices(scaled, cutoff=5):
     #TODO: Well this is a travesty of incomprehensibility. Verify it then explain yourself.
     D = scaled.sources.shape[1]
 
@@ -47,9 +47,9 @@ def tree_nodes(scaled, cutoff=5):
         terminal=indices.new_ones((1,), dtype=torch.bool),
         children=indices.new_full((1,) + (2,)*D, -1))
 
-    bases = 2**torch.arange(D, device=indices.device)
+    bases = 2**torch.flip(torch.arange(D, device=indices.device), (0,))
     subscript_offsets = chebyshev.cartesian_product(torch.tensor([0, 1], device=indices.device), D)
-    center_offsets = chebyshev.flat_cartesian_product(torch.tensor([-1., +1.], device=indices.device), D)
+    center_offsets = chebyshev.cartesian_product(torch.tensor([-1., +1.], device=indices.device), D)
 
     depth = 0
     while True:
@@ -73,6 +73,7 @@ def tree_nodes(scaled, cutoff=5):
         tree.children[active] = first_child[(slice(None),) + (None,)*D] + (subscript_offsets*bases).sum(-1)
 
         centers = tree.centers[active][(slice(None),) + (None,)*D] + center_offsets/2**depth
+        centers = centers.reshape(-1, D)
 
         children = arrdict.arrdict(
             parents=active.repeat_interleave(2**D),
@@ -82,7 +83,7 @@ def tree_nodes(scaled, cutoff=5):
             children=tree.children.new_full((len(centers),) + (2,)*D, -1))
         tree = arrdict.cat([tree, children])
 
-        return tree, indices
+    return tree, indices
 
 def plot_tree(tree, ax=None):
     tree = tree.cpu().numpy()
@@ -108,7 +109,24 @@ def plot_problem(prob, q=.01, ax=None):
 
     ax.scatter(*prob.targets.T, color='C0', label='targets', marker='.')
 
-    charges = (prob.charges - prob.charges.min())/(prob.charges.max() - prob.charges.min())
+    charges = (prob.charges - prob.charges.min())/(prob.charges.max() - prob.charges.min() + 1e-6)
     ax.scatter(*prob.sources.T, color='red', s=10 + 100*charges, label='sources', marker='x')
 
     return ax
+
+def run():
+    torch.random.manual_seed(1)
+    prob = aljpy.dotdict(
+        sources=torch.tensor([[-.4, .4], [-.8, .8]]),
+        charges=torch.tensor([1., 1.]),
+        targets=torch.empty((0, 2)))
+
+    prob = test.random_problem(T=30)
+
+    scaled = scale(prob)
+    cutoff = 2
+
+    tree, indices = tree_indices(scaled, cutoff)
+
+    ax = plot_problem(scaled)
+    ax = plot_tree(tree, ax=ax)
