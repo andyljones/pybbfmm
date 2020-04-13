@@ -32,6 +32,7 @@ def value_counts(indices, length):
     return accumulate(indices, vals, length)
 
 def tree_nodes(scaled, cutoff=5):
+    #TODO: Well this is a travesty of incomprehensibility. Verify it then explain yourself.
     D = scaled.sources.shape[1]
     points = torch.cat([scaled.sources, scaled.targets])
     leaves = points.new_zeros((len(points),), dtype=torch.long)
@@ -40,10 +41,12 @@ def tree_nodes(scaled, cutoff=5):
         parents=leaves.new_full((1,), 0),
         depths=leaves.new_zeros((1,)),
         centers=points.new_zeros((1, D)),
-        terminal=leaves.new_ones((1,), dtype=torch.bool),)
+        terminal=leaves.new_ones((1,), dtype=torch.bool),
+        children=leaves.new_full((1,) + (2,)*D, -1))
 
     bases = 2**torch.arange(D, device=leaves.device)
-    offsets = chebyshev.cartesian_product(torch.tensor([-1., +1.], device=leaves.device), D)
+    subscript_offsets = chebyshev.cartesian_product(torch.tensor([0, 1], device=leaves.device), D)
+    center_offsets = chebyshev.cartesian_product(torch.tensor([-1., +1.], device=leaves.device), D)
 
     depth = 0
     while True:
@@ -56,23 +59,25 @@ def tree_nodes(scaled, cutoff=5):
             break
 
         depth += 1
-
+        
         parents = nodes[node_active]
         zeroth_child = len(tree.parents) + 2**D*torch.arange(len(parents), device=parents.device)
         point_offset = ((points[point_active] >= tree.centers[parents][inv[point_active]])*bases).sum(-1)
         child = zeroth_child + point_offset
         leaves[point_active] = child
 
-        centers = tree.centers[parents][:, None] + offsets/2**depth
+        tree.children[parents] = zeroth_child[:, None] + (subscript_offsets*bases).sum(-1)
+
+        centers = tree.centers[parents][:, None] + center_offsets/2**depth
         centers = centers.reshape(-1, D)
 
         children = arrdict.arrdict(
             parents=parents.repeat_interleave(2**D),
             depths=tree.depths.new_full((len(centers),), depth),
             centers=centers,
-            terminal=tree.terminal.new_ones((len(centers),)))
+            terminal=tree.terminal.new_ones((len(centers),)),
+            children=tree.children.new_full((len(centers),) + (2,)*D, -1))
         tree = arrdict.cat([tree, children])
-
 
     return tree, leaves
 
