@@ -13,13 +13,14 @@ def limits(prob):
 
 def scale(prob):
     lims = limits(prob)
-    lower, scale = lims[0], lims[1] - lims[0]
+    mid = (lims[0] + lims[1])/2
+    scale = (lims[1] - lims[0])/2
     return aljpy.dotdict(
         limits=lims,
         scale=scale,
-        sources=(prob.sources - lower)/scale,
+        sources=(prob.sources - mid)/scale,
         charges=prob.charges,
-        targets=(prob.targets - lower)/scale)
+        targets=(prob.targets - mid)/scale)
 
 def accumulate(indices, vals, length):
     totals = vals.new_zeros((length,) + vals.shape[1:])
@@ -39,26 +40,27 @@ def tree_nodes(scaled, cutoff=5):
         parents=leaves.new_full((1,), 0),
         depths=leaves.new_zeros((1,)),
         centers=points.new_zeros((1, D)),
-        terminal=leaves.new_empty((1,), dtype=torch.bool),)
+        terminal=leaves.new_ones((1,), dtype=torch.bool),)
 
     bases = 2**torch.arange(D, device=leaves.device)
-    offsets = chebyshev.cartesian_product(torch.tensor([-1, +1], device=leaves.device))
+    offsets = chebyshev.cartesian_product(torch.tensor([-1., +1.], device=leaves.device), D)
 
     depth = 0
     while True:
         nodes, inv, counts = torch.unique(leaves, return_inverse=True, return_counts=True)
         tree.terminal[nodes] = (counts <= cutoff)
-        if tree.terminal.all():
+        
+        node_active = ~tree.terminal[nodes]
+        point_active = node_active[inv]
+        if not point_active.any():
             break
 
         depth += 1
 
-        node_active = ~tree.terminal[nodes]
-        point_active = node_active[inv]
         parents = nodes[node_active]
         zeroth_child = len(tree.parents) + 2**D*torch.arange(len(parents), device=parents.device)
-        point_offset = ((tree.centers[parents][inv[point_active]] >= 0)*bases).sum(-1)
-        child = (zeroth_child + point_offset).reshape(-1, D)
+        point_offset = ((points[point_active] >= tree.centers[parents][inv[point_active]])*bases).sum(-1)
+        child = zeroth_child + point_offset
         leaves[point_active] = child
 
         centers = tree.centers[parents][:, None] + offsets/2**depth
@@ -66,10 +68,12 @@ def tree_nodes(scaled, cutoff=5):
 
         children = arrdict.arrdict(
             parents=parents.repeat_interleave(2**D),
-            depths=tree.depths.new_full(len(centers), depth),
+            depths=tree.depths.new_full((len(centers),), depth),
             centers=centers,
-            terminal=tree.terminal.new_empty(len(centers)))
+            terminal=tree.terminal.new_ones((len(centers),)))
         tree = arrdict.cat([tree, children])
 
+
+    return tree, leaves
 
 
