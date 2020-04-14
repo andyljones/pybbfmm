@@ -24,15 +24,6 @@ def scale(prob):
         charges=prob.charges,
         targets=(prob.targets - mid)/scale)
 
-def accumulate(indices, vals, length):
-    totals = vals.new_zeros((length,) + vals.shape[1:])
-    totals.index_add_(0, indices, vals)
-    return totals.reshape(-1, vals.shape[1:])
-
-def value_counts(indices, length):
-    vals = indices.new_ones((len(indices),), dtype=torch.int32)
-    return accumulate(indices, vals, length)
-
 def tree_indices(scaled, cutoff=5):
     #TODO: Well this is a travesty of incomprehensibility. Verify it then explain yourself.
     D = scaled.sources.shape[1]
@@ -89,40 +80,64 @@ def tree_indices(scaled, cutoff=5):
 
     return tree, indices
 
-def reflect(childtypes, direction):
+def reflect(childtypes, directions):
     """Args:
         direction: [-1, 0, +1]^D
         childtypes: [-1, +1]^D
     """
-    reflector = 1 - 2*direction.abs()
+    reflector = 1 - 2*directions.abs()
     return childtypes*reflector
     
 def children(tree, indices, childtypes):
     subscripts = (childtypes + 1)/2
     return tree.children[(indices, *subscripts.T)]
 
-def adj_neighbour(tree, indices, direction):
+def adj_neighbour(tree, indices, directions):
     if len(indices) == 0:
         return indices
 
     indices = torch.as_tensor(indices, dtype=tree.parents.dtype, device=tree.parents.device)
-    direction = torch.as_tensor(direction, dtype=tree.parents.dtype, device=tree.parents.device)
+    directions = torch.as_tensor(directions, dtype=tree.parents.dtype, device=tree.parents.device)
+    directions = directions[None].repeat_interleave(len(indices), 0) if directions.ndim == 1 else directions
 
     parents = tree.parents[indices]
     isnt_root = (parents >= 0)
-    coming_from_direction = (tree.childtypes[indices] == direction).any(-1)
-    recurse = isnt_root & coming_from_direction
+    not_opposite = (tree.childtypes[indices] == directions).any(-1)
+    recurse = isnt_root & not_opposite
 
     next_up = tree.parents[indices]
-    next_up[recurse] = adj_neighbour(tree, parents[recurse], direction)
+    next_up[recurse] = adj_neighbour(tree, parents[recurse], directions[recurse])
 
     parent_is_interior = (next_up >= 0) & ~tree.terminal[next_up]
-    reflected = reflect(tree.childtypes[indices][parent_is_interior], direction)
+    reflected = reflect(tree.childtypes[indices][parent_is_interior], directions[parent_is_interior])
     next_down = next_up
     next_down[parent_is_interior] = children(tree, next_up[parent_is_interior], reflected)
 
     return next_down
+
+def common_side(directions, childtypes):
+    pass
+
     
+def corner_neighbour(tree, indices, directions):
+    if len(indices) == 0:
+        return indices
+
+    indices = torch.as_tensor(indices, dtype=tree.parents.dtype, device=tree.parents.device)
+    directions = torch.as_tensor(directions, dtype=tree.parents.dtype, device=tree.parents.device)
+
+    parents = tree.parents[indices]
+    isnt_root = (parents >= 0)
+    not_opposite = (tree.childtypes[indices] == directions).any(-1)
+    recurse = isnt_root & not_opposite
+
+    recurse_corner = (tree.childtypes[indices] == directions).all(-1) & recurse
+    recurse_adj = ~recurse_corner & recurse
+    adj_sides = common_side(directions, tree.childtypes[indices[recurse_adj]])
+    next_up = tree.parents[indices]
+    next_up[recurse_corner] = corner_neighbour(tree, parents[recurse_corner], directions)
+    next_up[recurse_adj] = adj_neighbour(tree, parents[recurse_adj], adj_sides)
+
 
 def plot_tree(tree, ax=None, color=None):
     tree = tree.cpu().numpy()
