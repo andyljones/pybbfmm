@@ -37,7 +37,7 @@ def tree_indices(scaled, cutoff=5):
         centers=points.new_zeros((1, D)),
         terminal=indices.new_ones((1,), dtype=torch.bool),
         children=indices.new_full((1,) + (2,)*D, -1),
-        childtypes=indices.new_zeros((1, D)))
+        heritages=indices.new_zeros((1, D)))
 
     bases = 2**torch.flip(torch.arange(D, device=indices.device), (0,))
     subscript_offsets = chebyshev.cartesian_product(torch.tensor([0, 1], device=indices.device), D)
@@ -66,86 +66,64 @@ def tree_indices(scaled, cutoff=5):
         tree.children[active] = first_child[trailing_ones] + (subscript_offsets*bases).sum(-1)
 
         centers = tree.centers[active][trailing_ones] + center_offsets.float()/2**depth
-        childtypes = center_offsets[None].expand_as(centers)
+        heritages = center_offsets[None].expand_as(centers)
 
         n_children = len(active)*2**D
         children = arrdict.arrdict(
             parents=active.repeat_interleave(2**D),
             depths=tree.depths.new_full((n_children,), depth),
             centers=centers.reshape(-1, D),
-            childtypes=childtypes.reshape(-1, D),
+            heritages=heritages.reshape(-1, D),
             terminal=tree.terminal.new_ones((n_children,)),
             children=tree.children.new_full((n_children,) + (2,)*D, -1))
         tree = arrdict.cat([tree, children])
 
     return tree, indices
 
-def reflect(childtypes, directions):
+def reflect(heritages, directions):
     """Args:
         direction: [-1, 0, +1]^D
-        childtypes: [-1, +1]^D
+        heritages: [-1, +1]^D
     """
     reflector = 1 - 2*directions.abs()
-    return childtypes*reflector
+    return heritages*reflector
     
-def children(tree, indices, childtypes):
-    subscripts = (childtypes + 1)/2
+def children(tree, indices, heritages):
+    subscripts = (heritages + 1)/2
     return tree.children[(indices, *subscripts.T)]
 
-def adj_neighbour(tree, indices, directions):
-    if len(indices) == 0:
-        return indices
+def add_heritages(h, d):
+    return 
 
+def neighbours(tree, indices, directions):
+    """Inspired by
+
+    http://web.archive.org/web/20120907211934/http://ww1.ucmss.com/books/LFS/CSREA2006/MSV4517.pdf
+    """
     indices = torch.as_tensor(indices, dtype=tree.parents.dtype, device=tree.parents.device)
     directions = torch.as_tensor(directions, dtype=tree.parents.dtype, device=tree.parents.device)
     directions = directions[None].repeat_interleave(len(indices), 0) if directions.ndim == 1 else directions
     assert len(directions) == len(indices), 'There should be as many directions as indices'
 
-    parents = tree.parents[indices]
-    isnt_root = (parents >= 0)
-    not_opposite = (tree.childtypes[indices] == directions).any(-1)
-    recurse = isnt_root & not_opposite
+    current = indices
+    live = torch.ones_like(indices, dtype=torch.bool)
+    path = []
+    while live.any():
+        heritage = tree.heritages[indices]
+        target = heritage*(1 - 2*directions.abs())
+        path.append(target.where(live, torch.zeros_like(directions)))
 
-    next_up = tree.parents[indices]
-    next_up[recurse] = adj_neighbour(tree, parents[recurse], directions[recurse])
+        directions = (heritage + directions) / 2 
+        current[live] = tree.parents[indices[live]]
+        live = live & (directions != 0).any(-1) & (current != 0)
 
-    next_up_is_interior = (next_up >= 0) & ~tree.terminal[next_up]
-    reflected = reflect(tree.childtypes[indices][next_up_is_interior], directions[next_up_is_interior])
-    next_down = next_up
-    next_down[next_up_is_interior] = children(tree, next_up[next_up_is_interior], reflected)
+    for heritage in path[::-1]:
+        internal = ~tree.terminal[current]
+        current[internal] = children(tree, current[internal], heritage[internal])
 
-    return next_down
+    return current
 
-def common_side(directions, childtypes):
-    return directions*(directions == childtypes).type_as(directions)
-    
-def corner_neighbour(tree, indices, directions):
-    if len(indices) == 0:
-        return indices
 
-    indices = torch.as_tensor(indices, dtype=tree.parents.dtype, device=tree.parents.device)
-    directions = torch.as_tensor(directions, dtype=tree.parents.dtype, device=tree.parents.device)
-    directions = directions[None].repeat_interleave(len(indices), 0) if directions.ndim == 1 else directions
-    assert len(directions) == len(indices), 'There should be as many directions as indices'
-
-    parents = tree.parents[indices]
-    isnt_root = (parents >= 0)
-    not_opposite = (tree.childtypes[indices] == directions).any(-1)
-    recurse = isnt_root & not_opposite
-
-    recurse_corner = (tree.childtypes[indices] == directions).all(-1) & recurse
-    recurse_adj = ~recurse_corner & recurse
-    adj_sides = common_side(directions, tree.childtypes[indices[recurse_adj]])
-    next_up = tree.parents[indices]
-    next_up[recurse_corner] = corner_neighbour(tree, parents[recurse_corner], directions)
-    next_up[recurse_adj] = adj_neighbour(tree, parents[recurse_adj], adj_sides)
-
-    next_up_is_interior = (next_up >= 0) & ~tree.terminal[next_up]
-    reflected = -1*tree.childtypes[indices[next_up_is_interior]]
-    next_down = next_up
-    next_down[next_up_is_interior] = children(tree, next_up[next_up_is_interior], reflected)
-
-    return next_down
 
 def plot_tree(tree, ax=None, color=None):
     tree = tree.cpu().numpy()
