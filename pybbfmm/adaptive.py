@@ -78,6 +78,8 @@ def tree_indices(scaled, cutoff=5):
             children=tree.children.new_full((n_children,) + (2,)*D, -1))
         tree = arrdict.cat([tree, children])
 
+    tree['id'] = torch.arange(len(tree.parents), device=points.device)
+
     return tree, indices
 
 def children(tree, indices, descent):
@@ -122,12 +124,15 @@ def u_list(tree):
     pairs = torch.cat([pairs, smaller_partners])
     return pairs
 
+def v_list(tree):
+    pass
+
 
 def interaction_lists(tree):
     pass
 
 
-def plot_tree(tree, ax=None, color={}):
+def plot_tree(tree, ax=None, color={}, number=False):
     tree = tree.cpu().numpy()
 
     fig, ax = plt.subplots() if ax is None else (ax.figure, ax)
@@ -136,19 +141,17 @@ def plot_tree(tree, ax=None, color={}):
     ax.set_aspect(1)
 
     color = {int(v): k for k, vs in color.items() for v in vs}
-    for depth in np.unique(tree.depths):
-        level = tree[tree.depths == depth]
-        idxs, = (tree.depths == depth).nonzero()
 
+    for id, center, depth in zip(tree.id, tree.centers, tree.depths):
+        if id in color:
+            kwargs = {'color': color[id], 'fill': True, 'alpha': .25} 
+        else:
+            kwargs = {'color': 'k', 'fill': False, 'alpha': .25}
+        if number:
+            ax.annotate(str(id), center, ha='center', va='center')
         width = 2/2**depth
-        corners = level.centers - np.array([1, 1])*width/2
-
-        for idx, corner in zip(idxs, corners):
-            if idx in color:
-                kwargs = {'color': color[idx], 'fill': True, 'alpha': .25} 
-            else:
-                kwargs = {'color': 'k', 'fill': False}
-            ax.add_artist(mpl.patches.Rectangle(corner, width, width, **kwargs))
+        corner = center - np.array([1, 1])*width/2
+        ax.add_artist(mpl.patches.Rectangle(corner, width, width, **kwargs))
             
     return ax
 
