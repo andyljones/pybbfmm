@@ -33,9 +33,6 @@ def value_counts(indices, length):
     vals = indices.new_ones((len(indices),), dtype=torch.int32)
     return accumulate(indices, vals, length)
 
-def children(indices, tree, active):
-    pass
-
 def tree_indices(scaled, cutoff=5):
     #TODO: Well this is a travesty of incomprehensibility. Verify it then explain yourself.
     D = scaled.sources.shape[1]
@@ -48,11 +45,12 @@ def tree_indices(scaled, cutoff=5):
         depths=indices.new_zeros((1,)),
         centers=points.new_zeros((1, D)),
         terminal=indices.new_ones((1,), dtype=torch.bool),
-        children=indices.new_full((1,) + (2,)*D, -1))
+        children=indices.new_full((1,) + (2,)*D, -1),
+        childtypes=indices.new_zeros((1, D)))
 
     bases = 2**torch.flip(torch.arange(D, device=indices.device), (0,))
     subscript_offsets = chebyshev.cartesian_product(torch.tensor([0, 1], device=indices.device), D)
-    center_offsets = chebyshev.cartesian_product(torch.tensor([-1., +1.], device=indices.device), D)
+    center_offsets = chebyshev.cartesian_product(torch.tensor([-1, +1], device=indices.device), D)
 
     depth = 0
     while True:
@@ -73,22 +71,60 @@ def tree_indices(scaled, cutoff=5):
         child_node = first_child[active_inv] + point_offset
         indices[point_is_active] = child_node
 
-        tree.children[active] = first_child[(slice(None),) + (None,)*D] + (subscript_offsets*bases).sum(-1)
+        trailing_ones = (slice(None),) + (None,)*D
+        tree.children[active] = first_child[trailing_ones] + (subscript_offsets*bases).sum(-1)
 
-        centers = tree.centers[active][(slice(None),) + (None,)*D] + center_offsets/2**depth
-        centers = centers.reshape(-1, D)
+        centers = tree.centers[active][trailing_ones] + center_offsets.float()/2**depth
+        childtypes = center_offsets[None].expand_as(centers)
 
+        n_children = len(active)*2**D
         children = arrdict.arrdict(
             parents=active.repeat_interleave(2**D),
-            depths=tree.depths.new_full((len(centers),), depth),
-            centers=centers,
-            terminal=tree.terminal.new_ones((len(centers),)),
-            children=tree.children.new_full((len(centers),) + (2,)*D, -1))
+            depths=tree.depths.new_full((n_children,), depth),
+            centers=centers.reshape(-1, D),
+            childtypes=childtypes.reshape(-1, D),
+            terminal=tree.terminal.new_ones((n_children,)),
+            children=tree.children.new_full((n_children,) + (2,)*D, -1))
         tree = arrdict.cat([tree, children])
 
     return tree, indices
 
-def plot_tree(tree, ax=None):
+def reflect(childtypes, direction):
+    """Args:
+        direction: [-1, 0, +1]^D
+        childtypes: [-1, +1]^D
+    """
+    reflector = 1 - 2*direction.abs()
+    return childtypes*reflector
+    
+def children(tree, indices, childtypes):
+    subscripts = (childtypes + 1)/2
+    return tree.children[(indices, *subscripts.T)]
+
+def adj_neighbour(tree, indices, direction):
+    if len(indices) == 0:
+        return indices
+
+    indices = torch.as_tensor(indices, dtype=tree.parents.dtype, device=tree.parents.device)
+    direction = torch.as_tensor(direction, dtype=tree.parents.dtype, device=tree.parents.device)
+
+    parents = tree.parents[indices]
+    parent_isnt_root = (parents != 0)
+    coming_from_direction = (tree.childtypes[indices] == direction).any(-1)
+    recurse = parent_isnt_root & coming_from_direction
+
+    next_up = tree.parents[indices]
+    next_up[recurse] = adj_neighbour(tree, parents[recurse], direction)
+
+    parent_is_interior = (next_up != 0) & ~tree.terminal[next_up]
+    reflected = reflect(tree.childtypes[indices][parent_is_interior], direction)
+    next_down = next_up
+    next_down[parent_is_interior] = children(tree, next_up[parent_is_interior], reflected)
+
+    return next_down
+    
+
+def plot_tree(tree, ax=None, color=None):
     tree = tree.cpu().numpy()
 
     fig, ax = plt.subplots() if ax is None else (ax.figure, ax)
@@ -96,6 +132,7 @@ def plot_tree(tree, ax=None):
     ax.set_ylim(-1.1, +1.1)
     ax.set_aspect(1)
 
+    kwargs = {'color': color, 'fill': True, 'alpha': .25} if color else {'color': 'k', 'fill': False}
     for depth in np.unique(tree.depths):
         level = tree[tree.depths == depth]
 
@@ -103,7 +140,7 @@ def plot_tree(tree, ax=None):
         corners = level.centers - np.array([1, 1])*width/2
 
         for corner in corners:
-            ax.add_artist(mpl.patches.Rectangle(corner, width, width, color='k', fill=False))
+            ax.add_artist(mpl.patches.Rectangle(corner, width, width, **kwargs))
             
     return ax
 
@@ -118,6 +155,8 @@ def plot_problem(prob, q=.01, ax=None):
     ax.scatter(*prob.sources.T, color='red', s=10 + 100*charges, label='sources', marker='x')
 
     return ax
+
+    
 
 def run():
     torch.random.manual_seed(1)
