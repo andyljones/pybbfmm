@@ -99,6 +99,7 @@ def adj_neighbour(tree, indices, directions):
     indices = torch.as_tensor(indices, dtype=tree.parents.dtype, device=tree.parents.device)
     directions = torch.as_tensor(directions, dtype=tree.parents.dtype, device=tree.parents.device)
     directions = directions[None].repeat_interleave(len(indices), 0) if directions.ndim == 1 else directions
+    assert len(directions) == len(indices), 'There should be as many directions as indices'
 
     parents = tree.parents[indices]
     isnt_root = (parents >= 0)
@@ -108,16 +109,15 @@ def adj_neighbour(tree, indices, directions):
     next_up = tree.parents[indices]
     next_up[recurse] = adj_neighbour(tree, parents[recurse], directions[recurse])
 
-    parent_is_interior = (next_up >= 0) & ~tree.terminal[next_up]
-    reflected = reflect(tree.childtypes[indices][parent_is_interior], directions[parent_is_interior])
+    next_up_is_interior = (next_up >= 0) & ~tree.terminal[next_up]
+    reflected = reflect(tree.childtypes[indices][next_up_is_interior], directions[next_up_is_interior])
     next_down = next_up
-    next_down[parent_is_interior] = children(tree, next_up[parent_is_interior], reflected)
+    next_down[next_up_is_interior] = children(tree, next_up[next_up_is_interior], reflected)
 
     return next_down
 
 def common_side(directions, childtypes):
-    pass
-
+    return directions*(directions == childtypes).type_as(directions)
     
 def corner_neighbour(tree, indices, directions):
     if len(indices) == 0:
@@ -125,6 +125,8 @@ def corner_neighbour(tree, indices, directions):
 
     indices = torch.as_tensor(indices, dtype=tree.parents.dtype, device=tree.parents.device)
     directions = torch.as_tensor(directions, dtype=tree.parents.dtype, device=tree.parents.device)
+    directions = directions[None].repeat_interleave(len(indices), 0) if directions.ndim == 1 else directions
+    assert len(directions) == len(indices), 'There should be as many directions as indices'
 
     parents = tree.parents[indices]
     isnt_root = (parents >= 0)
@@ -138,6 +140,12 @@ def corner_neighbour(tree, indices, directions):
     next_up[recurse_corner] = corner_neighbour(tree, parents[recurse_corner], directions)
     next_up[recurse_adj] = adj_neighbour(tree, parents[recurse_adj], adj_sides)
 
+    next_up_is_interior = (next_up >= 0) & ~tree.terminal[next_up]
+    reflected = -1*tree.childtypes[indices[next_up_is_interior]]
+    next_down = next_up
+    next_down[next_up_is_interior] = children(tree, next_up[next_up_is_interior], reflected)
+
+    return next_down
 
 def plot_tree(tree, ax=None, color=None):
     tree = tree.cpu().numpy()
@@ -170,8 +178,6 @@ def plot_problem(prob, q=.01, ax=None):
     ax.scatter(*prob.sources.T, color='red', s=10 + 100*charges, label='sources', marker='x')
 
     return ax
-
-    
 
 def run():
     torch.random.manual_seed(1)
