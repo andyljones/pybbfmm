@@ -171,12 +171,13 @@ def run():
         charges=torch.tensor([1., 1.]),
         targets=torch.empty((0, 2)))
 
-    prob = test.random_problem(T=30)
+    prob = test.random_problem(T=500)
 
     scaled = scale(prob)
-    cutoff = 2
 
-    tree, indices = tree_indices(scaled, cutoff)
+    tree, indices = tree_indices(scaled)
 
-    ax = plot_problem(scaled)
-    ax = plot_tree(tree, ax=ax)
+    us = u_list(tree)
+
+    b = torch.unique(us[:, 0])[50]
+    ax = plot_tree(tree, color={'C0': [b], 'C1': us[us[:, 0] == b, 1]})
