@@ -85,34 +85,32 @@ def children(tree, indices, descent):
     return tree.children[(indices, *subscripts.T)]
 
 def neighbours(tree, indices, directions):
-    """Inspired by
-
-    http://web.archive.org/web/20120907211934/http://ww1.ucmss.com/books/LFS/CSREA2006/MSV4517.pdf
-    """
     indices = torch.as_tensor(indices, dtype=tree.parents.dtype, device=tree.parents.device)
     directions = torch.as_tensor(directions, dtype=tree.parents.dtype, device=tree.parents.device)
     directions = directions[None].repeat_interleave(len(indices), 0) if directions.ndim == 1 else directions
     assert len(directions) == len(indices), 'There should be as many directions as indices'
 
     current = indices
-    live = torch.ones_like(indices, dtype=torch.bool)
-    path = []
-    while live.any():
+    alive = [torch.ones_like(indices, dtype=torch.bool)]
+    neighbour_descents = []
+    while alive[-1].any():
+        live = alive[-1] & (directions != 0).any(-1) & (current >= 0)
+        alive.append(live)
+
         descent = tree.descent[current]
-        path.append(descent*(1 - 2*directions.abs()))
+        neighbour_descents.append(descent*(1 - 2*directions.abs()))
 
         directions = (descent + directions).div(2).long() 
         current[live] = tree.parents[current[live]]
-        live = live & (directions != 0).any(-1) & (current >= 0)
 
-    for descent in path[::-1]:
-        internal = ~tree.terminal[current] & (current >= 0)
+    for descent, live in zip(neighbour_descents[::-1], alive[::-1]):
+        internal = ~tree.terminal[current] & (current >= 0) & live
         current[internal] = children(tree, current[internal], descent[internal])
 
     return current
 
 
-def plot_tree(tree, ax=None, color=None):
+def plot_tree(tree, ax=None, color={}):
     tree = tree.cpu().numpy()
 
     fig, ax = plt.subplots() if ax is None else (ax.figure, ax)
@@ -120,14 +118,19 @@ def plot_tree(tree, ax=None, color=None):
     ax.set_ylim(-1.1, +1.1)
     ax.set_aspect(1)
 
-    kwargs = {'color': color, 'fill': True, 'alpha': .25} if color else {'color': 'k', 'fill': False}
+    color = {int(v): k for k, vs in color.items() for v in vs}
     for depth in np.unique(tree.depths):
         level = tree[tree.depths == depth]
+        idxs, = (tree.depths == depth).nonzero()
 
         width = 2/2**depth
         corners = level.centers - np.array([1, 1])*width/2
 
-        for corner in corners:
+        for idx, corner in zip(idxs, corners):
+            if idx in color:
+                kwargs = {'color': color[idx], 'fill': True, 'alpha': .25} 
+            else:
+                kwargs = {'color': 'k', 'fill': False}
             ax.add_artist(mpl.patches.Rectangle(corner, width, width, **kwargs))
             
     return ax
