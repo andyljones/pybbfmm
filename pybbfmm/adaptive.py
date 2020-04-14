@@ -90,7 +90,7 @@ def neighbours(tree, indices, directions):
     directions = directions[None].repeat_interleave(len(indices), 0) if directions.ndim == 1 else directions
     assert len(directions) == len(indices), 'There should be as many directions as indices'
 
-    current = indices
+    current = indices.clone()
     alive = [torch.ones_like(indices, dtype=torch.bool)]
     neighbour_descents = []
     while alive[-1].any():
@@ -108,6 +108,23 @@ def neighbours(tree, indices, directions):
         current[internal] = children(tree, current[internal], descent[internal])
 
     return current
+
+def u_list(tree):
+    """All pairs of neighbouring childless nodes"""
+    D = tree.children.ndim-1
+    bs = tree.terminal.nonzero().squeeze(1)
+    ds = chebyshev.flat_cartesian_product(torch.tensor([-1, 0, +1], device=bs.device), D)
+    pairs = torch.cat([torch.stack([bs, neighbours(tree, bs, d)], -1) for d in ds])
+    pairs = pairs[(pairs >= 0).all(-1) & tree.terminal[pairs[:, 1]]]
+
+    partner_is_larger = tree.depths[pairs[:, 0]] > tree.depths[pairs[:, 1]]
+    smaller_partners = torch.flip(pairs[partner_is_larger], (1,))
+    pairs = torch.cat([pairs, smaller_partners])
+    return pairs
+
+
+def interaction_lists(tree):
+    pass
 
 
 def plot_tree(tree, ax=None, color={}):
