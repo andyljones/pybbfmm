@@ -41,7 +41,7 @@ def tree_indices(scaled, cutoff=5):
     indices = points.new_zeros((len(points),), dtype=torch.long)
 
     tree = arrdict.arrdict(
-        parents=indices.new_full((1,), 0),
+        parents=indices.new_full((1,), -1),
         depths=indices.new_zeros((1,)),
         centers=points.new_zeros((1, D)),
         terminal=indices.new_ones((1,), dtype=torch.bool),
@@ -109,14 +109,14 @@ def adj_neighbour(tree, indices, direction):
     direction = torch.as_tensor(direction, dtype=tree.parents.dtype, device=tree.parents.device)
 
     parents = tree.parents[indices]
-    parent_isnt_root = (parents != 0)
+    isnt_root = (parents >= 0)
     coming_from_direction = (tree.childtypes[indices] == direction).any(-1)
-    recurse = parent_isnt_root & coming_from_direction
+    recurse = isnt_root & coming_from_direction
 
     next_up = tree.parents[indices]
     next_up[recurse] = adj_neighbour(tree, parents[recurse], direction)
 
-    parent_is_interior = (next_up != 0) & ~tree.terminal[next_up]
+    parent_is_interior = (next_up >= 0) & ~tree.terminal[next_up]
     reflected = reflect(tree.childtypes[indices][parent_is_interior], direction)
     next_down = next_up
     next_down[parent_is_interior] = children(tree, next_up[parent_is_interior], reflected)
