@@ -1,7 +1,7 @@
 import numpy as np
 from types import SimpleNamespace
 
-def neighbours(tree, node, direction):
+def neighbour(tree, node, direction):
     """Finds the neighbour of a node in an adaptive quadtree or it's D-dimensional
     generalizations.
     
@@ -24,36 +24,45 @@ def neighbours(tree, node, direction):
         An integer giving the index of the neighbouring node, or -1 if it doesn't 
         exist.
     """
+    direction = np.asarray(direction)
+
     # Ascend to the common ancestor
     neighbour_descents = []
     while True:
         node_descent = tree.descent[node]
-        neighbour_descent = node_descent*(1 - 2*direction.abs())
+        neighbour_descent = node_descent*(1 - 2*abs(direction))
         neighbour_descents.append(neighbour_descent)
 
-        direction = int((node_descent + direction)/2)
+        direction = ((node_descent + direction)/2).astype(int)
         node = tree.parent[node]
         if (direction == 0).all() or node < 0:
             break
             
     # Descend to the neighbour 
     for neighbour_descent in neighbour_descents[::-1]:
-        if (tree.terminal[node]) or (node == -1):
+        if (tree.terminal[node]) or (node < 0):
             break
-        node = tree.children[(node, *(neighbour_descent.T + 1)/2)]
+        node = tree.children[(node, *(neighbour_descent.T + 1)//2)]
   
     return node
 
-def random_tree(term_prob=.75, D=2):
+def random_tree(term_prob=.5, D=2, min_size=10, max_size=100):
+    if min_size:
+        while True:
+            tree = random_tree(term_prob, D, None, max_size)
+            if len(tree.parent) > min_size:
+                return tree
+
     tree = SimpleNamespace(
         parent=np.array([-1]),
         children=np.full((1,)+(2,)*D, -1),
-        descent=np.full((1, D), -1),
+        descent=np.full((1, D), 0),
         terminal=np.array([False]),)
     active = np.array([0])
 
     while True:
-        terminated = np.random.rand(len(active)) < term_prob
+        prob = term_prob if len(tree.parent) < max_size else 1.
+        terminated = np.random.rand(len(active)) < prob
         tree.terminal[active[terminated]] = True
 
         active = active[~terminated]
@@ -63,17 +72,59 @@ def random_tree(term_prob=.75, D=2):
         tree.parent = np.r_[tree.parent, active.repeat(2**D)]
 
         children = len(tree.children) + np.arange(2**D * len(active))
-        tree.children = np.r_[tree.children, children.reshape(len(active), *(2,)*D)]
+        tree.children[active] = children.reshape(len(active), *(2,)*D)
+        tree.children = np.r_[tree.children, np.full((len(children), *(2,)*D), -1)]
 
-        descent = np.stack(np.meshgrid(*([-1, +1],)*D), -1)
-        descent = descent[None].repeat(len(active)).reshape(-1, D)
-        tree.descent = np.r_[tree.descent, descent]
+        descent = np.stack(np.meshgrid(*([-1, +1],)*D, indexing='ij'), -1)
+        descent = descent[None].repeat(len(active), 0)
+        tree.descent = np.r_[tree.descent, descent.reshape(-1, D)]
 
         tree.terminal = np.r_[tree.terminal, np.full(len(children), False)]
         active = children
     
     return tree
 
+def plot(tree, color={}, ax=None):
+    import matplotlib.pyplot as plt
+    import matplotlib as mpl
 
+    depths, centers = {0: 0}, {0: np.array([0, 0])}
+    for node in range(1, len(tree.parent)):
+        depths[node] = depths[tree.parent[node]] + 1
+        centers[node] = centers[tree.parent[node]] + tree.descent[node]/2.**depths[node]
 
+    fig, ax = plt.subplots() if ax is None else (ax.figure, ax)
+    ax.set_xlim(-1.1, +1.1)
+    ax.set_ylim(-1.1, +1.1)
+    ax.set_aspect(1)
 
+    for node in depths:
+        width = 2/2**depths[node]
+        corner = centers[node] - np.array([1, 1])*width/2
+        if node in color:
+            kwargs = {'color': color[node], 'fill': True, 'alpha': .5}
+        else: 
+            kwargs = {'color': 'k', 'fill': False}
+
+        ax.add_artist(mpl.patches.Rectangle(corner, width, width, **kwargs))
+
+def test(tree, repeats=10):
+    depths, centers = {0: 0}, {0: np.array([0, 0])}
+    for node in range(1, len(tree.parent)):
+        depths[node] = depths[tree.parent[node]] + 1
+        centers[node] = centers[tree.parent[node]] + tree.descent[node]/2.**depths[node]
+
+    for _ in range(repeats):
+        direction = np.random.choice([-1, 0, +1], size=(2,))
+        A = np.random.randint(len(tree.parent))
+        B = neighbour(tree, A, direction)
+
+        A_boundary = centers[A] + direction/2**depths[A]
+        if abs(A_boundary).max() >= 1:
+            assert B == -1
+        else:
+            B_boundary = centers[B] - direction/2**depths[B]
+            assert (A_boundary - B_boundary) @ direction < 1e-6
+
+def run():
+    pass
