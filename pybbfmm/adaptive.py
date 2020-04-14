@@ -37,7 +37,7 @@ def tree_indices(scaled, cutoff=5):
         centers=points.new_zeros((1, D)),
         terminal=indices.new_ones((1,), dtype=torch.bool),
         children=indices.new_full((1,) + (2,)*D, -1),
-        heritages=indices.new_zeros((1, D)))
+        descent=indices.new_zeros((1, D)))
 
     bases = 2**torch.flip(torch.arange(D, device=indices.device), (0,))
     subscript_offsets = chebyshev.cartesian_product(torch.tensor([0, 1], device=indices.device), D)
@@ -66,34 +66,23 @@ def tree_indices(scaled, cutoff=5):
         tree.children[active] = first_child[trailing_ones] + (subscript_offsets*bases).sum(-1)
 
         centers = tree.centers[active][trailing_ones] + center_offsets.float()/2**depth
-        heritages = center_offsets[None].expand_as(centers)
+        descent = center_offsets[None].expand_as(centers)
 
         n_children = len(active)*2**D
         children = arrdict.arrdict(
             parents=active.repeat_interleave(2**D),
             depths=tree.depths.new_full((n_children,), depth),
             centers=centers.reshape(-1, D),
-            heritages=heritages.reshape(-1, D),
+            descent=descent.reshape(-1, D),
             terminal=tree.terminal.new_ones((n_children,)),
             children=tree.children.new_full((n_children,) + (2,)*D, -1))
         tree = arrdict.cat([tree, children])
 
     return tree, indices
 
-def reflect(heritages, directions):
-    """Args:
-        direction: [-1, 0, +1]^D
-        heritages: [-1, +1]^D
-    """
-    reflector = 1 - 2*directions.abs()
-    return heritages*reflector
-    
-def children(tree, indices, heritages):
-    subscripts = (heritages + 1)/2
+def children(tree, indices, descent):
+    subscripts = (descent + 1)/2
     return tree.children[(indices, *subscripts.T)]
-
-def add_heritages(h, d):
-    return 
 
 def neighbours(tree, indices, directions):
     """Inspired by
@@ -109,20 +98,18 @@ def neighbours(tree, indices, directions):
     live = torch.ones_like(indices, dtype=torch.bool)
     path = []
     while live.any():
-        heritage = tree.heritages[indices]
-        target = heritage*(1 - 2*directions.abs())
-        path.append(target.where(live, torch.zeros_like(directions)))
+        descent = tree.descent[current]
+        path.append(descent*(1 - 2*directions.abs()))
 
-        directions = (heritage + directions) / 2 
-        current[live] = tree.parents[indices[live]]
-        live = live & (directions != 0).any(-1) & (current != 0)
+        directions = (descent + directions).div(2).long() 
+        current[live] = tree.parents[current[live]]
+        live = live & (directions != 0).any(-1) & (current >= 0)
 
-    for heritage in path[::-1]:
-        internal = ~tree.terminal[current]
-        current[internal] = children(tree, current[internal], heritage[internal])
+    for descent in path[::-1]:
+        internal = ~tree.terminal[current] & (current >= 0)
+        current[internal] = children(tree, current[internal], descent[internal])
 
     return current
-
 
 
 def plot_tree(tree, ax=None, color=None):
