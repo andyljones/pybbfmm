@@ -29,14 +29,14 @@ def neighbour(tree, node, direction):
     # Ascend to the common ancestor
     neighbour_descents = []
     while True:
+        if (direction == 0).all() or node < 0:
+            break
         node_descent = tree.descent[node]
         neighbour_descent = node_descent*(1 - 2*abs(direction))
         neighbour_descents.append(neighbour_descent)
 
         direction = ((node_descent + direction)/2).astype(int)
         node = tree.parent[node]
-        if (direction == 0).all() or node < 0:
-            break
             
     # Descend to the neighbour 
     for neighbour_descent in neighbour_descents[::-1]:
@@ -108,7 +108,23 @@ def plot(tree, color={}, ax=None):
 
         ax.add_artist(mpl.patches.Rectangle(corner, width, width, **kwargs))
 
-def test(tree, repeats=10):
+def demo(tree):
+    direction = np.random.choice([-1, 0, +1], size=(2,))
+    A = np.random.randint(len(tree.parent))
+    B = neighbour(tree, A, direction)
+    plot(tree, color={A: 'C0', B: 'C1'})
+
+def gridslice(center, depth, gridsize):
+    scaled = gridsize*(center+1)/2
+    ij = np.array([gridsize-scaled[1], scaled[0]])
+    width = 1/2*gridsize/2**depth
+
+    assert ((ij + width) % 1 == 0).all()
+    assert ((ij - width) % 1 == 0).all()
+    (t, l), (b, r) = ((ij - width).astype(int), (ij + width).astype(int))
+    return (slice(t, b), slice(l, r))
+
+def test(tree, repeats=1000):
     depths, centers = {0: 0}, {0: np.array([0, 0])}
     for node in range(1, len(tree.parent)):
         depths[node] = depths[tree.parent[node]] + 1
@@ -119,12 +135,16 @@ def test(tree, repeats=10):
         A = np.random.randint(len(tree.parent))
         B = neighbour(tree, A, direction)
 
-        A_boundary = centers[A] + direction/2**depths[A]
-        if abs(A_boundary).max() >= 1:
-            assert B == -1
-        else:
-            B_boundary = centers[B] - direction/2**depths[B]
-            assert (A_boundary - B_boundary) @ direction < 1e-6
+        offset = centers[A] + 2*direction/2**depths[A]
+
+        gridsize = 2**depths[A]
+        grid = np.zeros((gridsize, gridsize), dtype=int)
+        grid[gridslice(offset, depths[A], gridsize)] = 1
+        if B >= 0:
+            grid[gridslice(centers[B], depths[B], gridsize)] = 0
+        assert (grid == 0).all()
 
 def run():
-    pass
+    tree = random_tree()
+    demo(tree)
+    test(tree)
