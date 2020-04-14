@@ -115,8 +115,8 @@ def u_list(tree):
     """All pairs of neighbouring childless nodes"""
     D = tree.children.ndim-1
     bs = tree.terminal.nonzero().squeeze(1)
-    ds = chebyshev.flat_cartesian_product(torch.tensor([-1, 0, +1], device=bs.device), D)
-    pairs = torch.cat([torch.stack([bs, neighbours(tree, bs, d)], -1) for d in ds])
+    directions = chebyshev.flat_cartesian_product(torch.tensor([-1, 0, +1], device=bs.device), D)
+    pairs = torch.cat([torch.stack([bs, neighbours(tree, bs, d)], -1) for d in directions])
     pairs = pairs[(pairs >= 0).all(-1) & tree.terminal[pairs[:, 1]]]
 
     partner_is_larger = tree.depths[pairs[:, 0]] > tree.depths[pairs[:, 1]]
@@ -125,7 +125,24 @@ def u_list(tree):
     return pairs
 
 def v_list(tree):
-    pass
+    D = tree.children.ndim-1
+    bs = tree.id
+    parents = tree.parents[bs]
+    directions = chebyshev.flat_cartesian_product(torch.tensor([-1, 0, +1], device=bs.device), D)
+    directions = directions[(directions != 0).any(-1)]
+    colleagues = torch.stack([neighbours(tree, parents, d) for d in directions], -1)
+
+    friends_descents = chebyshev.flat_cartesian_product(torch.tensor([-1, +1], device=bs.device), D)
+    friends = torch.stack([children(tree, colleagues, d) for d in friends_descents], -1)
+
+    own_descents = tree.descent[bs]
+    vector = -own_descents[:, None, None] + 4*directions[None, :, None] + friends_descents[None, None, :]
+    friends[(vector.abs() <= 2).all(-1)] = -1
+
+    pairs = torch.stack([bs[:, None, None].expand_as(friends), friends], -1)
+    pairs = pairs[friends != -1]
+
+    return pairs
 
 
 def interaction_lists(tree):
@@ -181,6 +198,8 @@ def run():
     tree, indices = tree_indices(scaled)
 
     us = u_list(tree)
+    vs = v_list(tree)
 
-    b = torch.unique(us[:, 0])[50]
-    ax = plot_tree(tree, color={'C0': [b], 'C1': us[us[:, 0] == b, 1]})
+    b = torch.unique(us[:, 0])[-1]
+    color = {'C0': [b], 'C1': us[us[:, 0] == b, 1], 'C2': vs[vs[:, 0] == b, 1]}
+    ax = plot_tree(tree, color=color)
