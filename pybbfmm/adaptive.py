@@ -33,6 +33,9 @@ def value_counts(indices, length):
     vals = indices.new_ones((len(indices),), dtype=torch.int32)
     return accumulate(indices, vals, length)
 
+def children(indices, tree, active):
+    pass
+
 def tree_indices(scaled, cutoff=5):
     #TODO: Well this is a travesty of incomprehensibility. Verify it then explain yourself.
     D = scaled.sources.shape[1]
@@ -56,19 +59,19 @@ def tree_indices(scaled, cutoff=5):
         used, used_inv, counts = torch.unique(indices, return_inverse=True, return_counts=True)
         tree.terminal[used] = (counts <= cutoff)
         
-        used_active = ~tree.terminal[used]
-        point_active = used_active[used_inv]
-        if not point_active.any():
+        used_is_active = ~tree.terminal[used]
+        point_is_active = used_is_active[used_inv]
+        if not point_is_active.any():
             break
 
         depth += 1
         
-        active = used[used_active]
-        active_inv = (used_active.cumsum(0) - used_active.long())[used_inv[point_active]]
+        active = used[used_is_active]
+        active_inv = (used_is_active.cumsum(0) - used_is_active.long())[used_inv[point_is_active]]
         first_child = len(tree.parents) + 2**D*torch.arange(len(active), device=active.device)
-        point_offset = ((points[point_active] >= tree.centers[active][active_inv])*bases).sum(-1)
+        point_offset = ((points[point_is_active] >= tree.centers[active][active_inv])*bases).sum(-1)
         child_node = first_child[active_inv] + point_offset
-        indices[point_active] = child_node
+        indices[point_is_active] = child_node
 
         tree.children[active] = first_child[(slice(None),) + (None,)*D] + (subscript_offsets*bases).sum(-1)
 
