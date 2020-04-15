@@ -88,7 +88,7 @@ def pushdown_coeffs(cheb):
 def weights(scaled, cheb, tree, indices):
     loc = 2**tree.depths[indices.sources, None]*(scaled.sources - tree.centers[indices.sources])
     S = cheb.similarity(loc, cheb.nodes)
-    W = accumulate(indices.sources, S, len(tree.id))
+    W = accumulate(indices.sources, S*scaled.charges[:, None], len(tree.id))
 
     coeffs = uplift_coeffs(cheb)
     dot_dims = (list(range(1, cheb.D+2)), list(range(1, cheb.D+2)))
@@ -117,10 +117,10 @@ def x_interactions(scaled, cheb, tree, indices, lists):
     return accumulate(pairs[:, 0], ixns, len(tree.id))
 
 def w_interactions(W, scaled, cheb, tree, indices, lists):
-    pairs = inner_join(lists.w, right_index(indices.targets))
-    K = KERNEL(scaled.scale*scaled.targets[pairs[:, 1], None, :], node_points(scaled, cheb, tree, pairs[:, 0]))
-    ixns = torch.einsum('ij,ij->i', K, W[pairs[:, 0]]) if len(pairs) > 0 else scaled.charges[:0]
-    return accumulate(pairs[:, 1], ixns, len(indices.targets))
+    pairs = inner_join(left_index(indices.targets), lists.w)
+    K = KERNEL(scaled.scale*scaled.targets[pairs[:, 0], None, :], node_points(scaled, cheb, tree, pairs[:, 1]))
+    ixns = torch.einsum('ij,ij->i', K, W[pairs[:, 1]]) if len(pairs) > 0 else scaled.charges[:0]
+    return accumulate(pairs[:, 0], ixns, len(indices.targets))
 
 def u_interactions(scaled, indices, lists):
     pairs = inner_join(lists.u, right_index(indices.sources))
