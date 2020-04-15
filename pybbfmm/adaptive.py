@@ -48,8 +48,21 @@ def weights(scaled, cheb, tree, indices):
 
     return W
 
-def interactions(W, scaled, cheb, tree):
-    pass
+def interactions(W, scaled, cheb, tree, lists):
+    # depthscale = 2**(tree.depths.max()-1)
+    # vectors = (depthscale*(tree.centers[lists.v[:, 0]] - tree.centers[lists.v[:, 1]])).int()
+
+    # D = vectors.shape[1]
+    # base = (2*depthscale)**torch.arange(D, device=vectors.device, dtype=torch.int32)
+    # vector_id = ((2*depthscale + vectors)*base).sum(-1)
+    # unique_id, inv = torch.unique(vector_id, return_inverse=True)
+    ixns = torch.zeros_like(W)
+
+    nodes = scaled.scale*(cheb.nodes[None]/2**tree.depths[lists.v, None, None] + tree.centers[lists.v, None, :])
+    K = KERNEL(nodes[:, 0, :, None], nodes[:, 1, None, :])
+
+    Wv = torch.einsum('ijk,ik->ij', K, W[lists.v[:, 1]])
+    ixns.index_add_(0, lists.v[:, 0], Wv)
 
 def run():
     torch.random.manual_seed(1)
