@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
-from . import interactions
+from . import orthantree
 
 def plot_tree(tree, ax=None, color={}, number=False):
     tree = tree.cpu().numpy()
@@ -43,7 +43,7 @@ def plot_lists(tree, lists, b=None):
     color = {'u': 'C0', 'v': 'C1', 'w': 'C2', 'x': 'C3', 'y': 'C4'}
     key = {k: mpl.patches.Rectangle((0., 0.), 1, 1, color=c, alpha=.25) for k, c in color.items()}
     color = {color[k]: l[l[:, 0] == b, 1] for k, l in lists.items()}
-    color['C4'] = interactions.y_list(tree, b)
+    color['C4'] = orthantree.y_list(tree, b)
     ax = plot_tree(tree, color=color)
     ax.legend(key.values(), key.keys())
 
