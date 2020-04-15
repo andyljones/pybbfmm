@@ -97,6 +97,20 @@ def w_list(tree, ds, ns):
 
     return ws
 
+def lists(tree):
+    D = tree.children.ndim-1
+    ds = chebyshev.flat_cartesian_product(torch.tensor([-1, 0, +1], device=tree.id.device), D)
+    ns = torch.stack([neighbours(tree, tree.id, d) for d in ds], -1)
+
+    lists = arrdict.arrdict(
+                        u=u_list(tree, ds, ns),
+                        v=v_list(tree, ds, ns),
+                        w=w_list(tree, ds, ns))
+    lists['x'] = torch.flip(lists['w'], (1,))
+    return lists
+
+## TEST
+
 def y_list(tree, b):
     """Everything well-separated from the parent
     
@@ -117,22 +131,26 @@ def y_list(tree, b):
     ys = leaves[~(leaves[:, None] == descendents[None, :]).any(-1)]
     return ys
 
+def ancestor_interactions(tree, b):
+    import pandas as pd
 
-def lists(tree):
-    D = tree.children.ndim-1
-    ds = chebyshev.flat_cartesian_product(torch.tensor([-1, 0, +1], device=tree.id.device), D)
-    ns = torch.stack([neighbours(tree, tree.id, d) for d in ds], -1)
+    ancestors = [torch.as_tensor([b], device=tree.id.device)]
+    while ancestors[-1].nelement():
+        parents = tree.parents[ancestors[-1]]
+        ancestors.append(parents[parents >= 0])
+    ancestors = torch.cat(ancestors)
 
-    lists = arrdict.arrdict(
-                        u=u_list(tree, ds, ns),
-                        v=v_list(tree, ds, ns),
-                        w=w_list(tree, ds, ns))
-    lists['x'] = torch.flip(lists['w'], (1,))
-    return lists
+    ixns = []
+    for height, ancestor in enumerate(ancestors):
+        for k, l in lists.items():
+            kl_ixns = l[:, 1][l[:, 0] == ancestor]
+            for ixn in kl_ixns:
+                ixns.append((height, int(ancestor), k, int(ixn)))
+    return pd.DataFrame(ixns, columns=['height', 'ancestor', 'list', 'partner'])
 
 def test_lists():
     # Generate a random problem
     # Get the tree
     # Get the lists
-    # Check that the partners of each node plus the Y list cover the grid
+    # Check that the partners of each node and its ancestors cover the grid
     pass
