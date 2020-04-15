@@ -76,6 +76,12 @@ def uplift_coeffs(cheb):
     children = shifts[..., None, :] + cheb.nodes/2
     return cheb.similarity(cheb.nodes, children)
 
+def pushdown_coeffs(cheb):
+    shifts = torch.tensor([-.5, +.5], device=cheb.device)
+    shifts = chebyshev.cartesian_product(shifts, cheb.D)
+    children = shifts[..., None, :] + cheb.nodes/2
+    return cheb.similarity(children, cheb.nodes)
+
 def weights(scaled, cheb, tree, indices):
     loc = 2**tree.depths[indices.sources, None]*(scaled.sources - tree.centers[indices.sources])
     S = cheb.similarity(loc, cheb.nodes)
@@ -92,26 +98,42 @@ def weights(scaled, cheb, tree, indices):
 
     return W
 
+def far_field(W, cheb, tree):
+    F = torch.zeros_like(W)
+    F[0] = W[0]
+
+    coeffs = pushdown_coeffs(cheb)
+    dot_dims = ((1,), (-1,))
+
+    parents = tree.parents.new_tensor([0])
+    while parents.nelement():
+        parents = parents[~tree.terminal[parents]]
+        children = tree.children[parents]
+        F[children] = torch.tensordot(W[parents], coeffs, dot_dims)
+        parents = children.flatten()
+
+    return F
+
 def node_points(scaled, cheb, tree, indices):
     return scaled.scale*(cheb.nodes[None]/2**tree.depths[indices, None, None] + tree.centers[indices, None, :])
 
 def v_interactions(W, scaled, cheb, tree, lists):
     nodes = node_points(scaled, cheb, tree, lists.v)
     K = KERNEL(nodes[:, 0, :, None], nodes[:, 1, None, :])
-    Wv = torch.einsum('ijk,ik->ij', K, W[lists.v[:, 1]])
-    return accumulate(lists.v[:, 0], Wv, len(tree.id))
+    ixns = torch.einsum('ijk,ik->ij', K, W[lists.v[:, 1]])
+    return accumulate(lists.v[:, 0], ixns, len(tree.id))
 
 def x_interactions(scaled, cheb, tree, indices, lists):
     pairs = inner_join(lists.x, right_index(indices.sources))
     K = KERNEL(node_points(scaled, cheb, tree, pairs[:, 0]), scaled.sources[pairs[:, 1], None, :])
-    Wx = K*scaled.charges[pairs[:, 1], None]
-    return accumulate(pairs[:, 0], Wx, len(tree.id))
+    ixns = K*scaled.charges[pairs[:, 1], None]
+    return accumulate(pairs[:, 0], ixns, len(tree.id))
 
 def w_interactions(W, scaled, cheb, tree, indices, lists):
     pairs = inner_join(lists.w, right_index(indices.targets))
     K = KERNEL(scaled.targets[pairs[:, 1], None, :], node_points(scaled, cheb, tree, pairs[:, 0]))
-    Ww = (K*W[pairs[:, 0]]).sum(-1)
-    return accumulate(pairs[:, 1], Ww, len(indices.targets))
+    ixns = torch.einsum('ij,ij->i', K, W[pairs[:, 0]])
+    return accumulate(pairs[:, 1], ixns, len(indices.targets))
 
 def u_interactions(scaled, indices, lists):
     pairs = inner_join(left_index(indices.targets), right_index(indices.sources))
@@ -134,6 +156,7 @@ def run():
     lists = orthantree.pairlists(tree)
 
     W = weights(scaled, cheb, tree, indices)
+    f = far_field(W, cheb, tree)
     v = v_interactions(W, scaled, cheb, tree, lists)
     x = x_interactions(scaled, cheb, tree, indices, lists)
     w = w_interactions(W, scaled, cheb, tree, indices, lists)
