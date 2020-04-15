@@ -147,20 +147,41 @@ def v_list(tree):
 def w_list(tree):
     D = tree.children.ndim-1
     bs = tree.terminal.nonzero().squeeze(1)
-    directions = chebyshev.flat_cartesian_product(torch.tensor([-1, 0, +1], device=bs.device), D)
+    ds = chebyshev.flat_cartesian_product(torch.tensor([-1, 0, +1], device=bs.device), D)
 
-    adjacent = []
-    for d in directions:
-        adjacent.append(torch.cat([
-            bs[:, None], 
-            neighbours(tree, bs, d)[:, None],
-            d[None].repeat_interleave(len(bs), 0)], -1))
-    adjacent = torch.cat(adjacent, 0)
-    colleagues = adjacent[tree.depths[adjacent[:, 0]] == tree.depths[adjacent[:, 1]]]
+    origins, colleagues, directions = [], [], []
+    for d in ds:
+        ns = neighbours(tree, bs, d)
+        is_colleague = (tree.depths[bs] == tree.depths[ns])
+        valid = is_colleague & ~tree.terminal[ns]
+        origins.append(bs[valid])
+        colleagues.append(ns[valid])
+        directions.append(d[None].repeat_interleave(valid.sum(), 0))
+    origins, colleagues, directions = torch.cat(origins), torch.cat(colleagues), torch.cat(directions, 0)
 
+    ws = []
+    parents = colleagues
+    while parents.nelement():
+        friends = tree.children[parents].reshape(-1, 2**D)
+        distant = (tree.descent[friends] == directions[:, None, :]).any(-1)
+        
+        pairs = torch.stack([origins[:, None].expand_as(friends), friends], -1)
+        ws.append(pairs[distant])
+        
+        mask = ~distant & ~tree.terminal[friends]
+        origins, parents = pairs[mask].T
+        directions = directions[:, None].repeat_interleave(2**D, 1)[mask]
+    ws = torch.cat(ws)
+
+    return ws
 
 def interaction_lists(tree):
-    pass
+    lists = arrdict.arrdict(
+                        u=u_list(tree),
+                        v=v_list(tree),
+                        w=w_list(tree))
+    lists['x'] = torch.flip(lists['w'], (1,))
+    return lists
 
 
 def plot_tree(tree, ax=None, color={}, number=False):
@@ -211,9 +232,8 @@ def run():
 
     tree, indices = tree_indices(scaled)
 
-    us = u_list(tree)
-    vs = v_list(tree)
+    lists = interaction_lists(tree)
 
-    b = torch.unique(us[:, 0])[-1]
-    color = {'C0': [b], 'C1': us[us[:, 0] == b, 1], 'C2': vs[vs[:, 0] == b, 1]}
+    b = 76
+    color = {f'C{i}': l[l[:, 0] == b, 1] for i, l in enumerate(lists.values())}
     ax = plot_tree(tree, color=color)
