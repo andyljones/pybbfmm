@@ -1,3 +1,4 @@
+import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 from . import interactions
@@ -37,8 +38,8 @@ def plot_problem(prob, q=.01, ax=None):
 
     return ax
 
-def plot_lists(tree, lists, b):
-    b = int(tree.terminal.nonzero().squeeze(-1)[0])
+def plot_lists(tree, lists, b=None):
+    b = int(tree.terminal.nonzero().squeeze(-1)[0]) if b is None else b
     color = {'u': 'C0', 'v': 'C1', 'w': 'C2', 'x': 'C3', 'y': 'C4'}
     key = {k: mpl.patches.Rectangle((0., 0.), 1, 1, color=c, alpha=.25) for k, c in color.items()}
     color = {color[k]: l[l[:, 0] == b, 1] for k, l in lists.items()}
