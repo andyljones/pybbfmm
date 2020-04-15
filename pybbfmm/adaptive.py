@@ -27,6 +27,17 @@ def accumulate(indices, vals, length):
     return totals
 
 def inner_product(A, B):
+    """Given an array of pairs (a, p) and another of pairs (q, b), returns all pairs (a, c)
+    such that for there's some pair (a, r) in the first array and another (r, b) in the second.
+    
+    Which is to say, it's an inner join. As a bonus, it automatically adds outer columns of 
+    indices to anything 1D passed.
+    """
+    if A.ndim == 1:
+        A = torch.stack([torch.arange(len(A), dtype=A.dtype, device=A.device), A], -1)
+    if B.ndim == 1:
+        B = torch.stack([B, torch.arange(len(B), dtype=B.dtype, device=B.device)], -1)
+
     A_order = torch.argsort(A[:, 1])
     A_sorted = A[A_order]
     A_unique, A_inv, A_counts = torch.unique(A_sorted[:, 1], return_inverse=True, return_counts=True)
@@ -81,7 +92,10 @@ def weights(scaled, cheb, tree, indices):
 
     return W
 
-def interactions(W, scaled, cheb, tree, lists):
+def node_points(scaled, cheb, tree, indices):
+    return scaled.scale*(cheb.nodes[None]/2**tree.depths[indices, None, None] + tree.centers[indices, None, :])
+
+def interactions(W, scaled, cheb, tree, indices, lists):
     # depthscale = 2**(tree.depths.max()-1)
     # vectors = (depthscale*(tree.centers[lists.v[:, 0]] - tree.centers[lists.v[:, 1]])).int()
 
@@ -91,11 +105,17 @@ def interactions(W, scaled, cheb, tree, lists):
     # unique_id, inv = torch.unique(vector_id, return_inverse=True)
     ixns = torch.zeros_like(W)
 
-    nodes = scaled.scale*(cheb.nodes[None]/2**tree.depths[lists.v, None, None] + tree.centers[lists.v, None, :])
+    # V contributions
+    nodes = node_points(scaled, cheb, tree, lists.v)
     K = KERNEL(nodes[:, 0, :, None], nodes[:, 1, None, :])
-
     Wv = torch.einsum('ijk,ik->ij', K, W[lists.v[:, 1]])
     ixns.index_add_(0, lists.v[:, 0], Wv)
+
+    # X contributions
+    pairs = inner_product(lists.x, indices.sources)
+    K = KERNEL(node_points(scaled, cheb, tree, pairs[:, 0]), scaled.sources[pairs[:, 1], None, :])
+    Wx = K*scaled.charges[pairs[:, 1], None]
+    ixns.index_add(0, pairs[:, 0], Wx)
 
 def run():
     torch.random.manual_seed(1)
