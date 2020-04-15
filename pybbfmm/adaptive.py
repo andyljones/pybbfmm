@@ -113,6 +113,11 @@ def w_interactions(W, scaled, cheb, tree, indices, lists):
     Ww = (K*W[pairs[:, 0]]).sum(-1)
     return accumulate(pairs[:, 1], Ww, len(indices.targets))
 
+def u_interactions(scaled, indices, lists):
+    pairs = inner_join(left_index(indices.targets), right_index(indices.sources))
+    K = KERNEL(scaled.targets[pairs[:, 0]], scaled.sources[pairs[:, 1]])
+    return accumulate(pairs[:, 0], K*scaled.charges[pairs[:, 1]], len(scaled.targets))
+
 def run():
     torch.random.manual_seed(1)
     prob = aljpy.dotdict(
@@ -132,3 +137,4 @@ def run():
     v = v_interactions(W, scaled, cheb, tree, lists)
     x = x_interactions(scaled, cheb, tree, indices, lists)
     w = w_interactions(W, scaled, cheb, tree, indices, lists)
+    u = u_interactions(scaled, indices, lists)
