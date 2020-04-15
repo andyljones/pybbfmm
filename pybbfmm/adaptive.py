@@ -98,22 +98,6 @@ def weights(scaled, cheb, tree, indices):
 
     return W
 
-def far_field(W, cheb, tree):
-    F = torch.zeros_like(W)
-    F[0] = W[0]
-
-    coeffs = pushdown_coeffs(cheb)
-    dot_dims = ((1,), (-1,))
-
-    parents = tree.parents.new_tensor([0])
-    while parents.nelement():
-        parents = parents[~tree.terminal[parents]]
-        children = tree.children[parents]
-        F[children] = torch.tensordot(W[parents], coeffs, dot_dims)
-        parents = children.flatten()
-
-    return F
-
 def node_points(scaled, cheb, tree, indices):
     return scaled.scale*(cheb.nodes[None]/2**tree.depths[indices, None, None] + tree.centers[indices, None, :])
 
@@ -140,6 +124,45 @@ def u_interactions(scaled, indices, lists):
     K = KERNEL(scaled.targets[pairs[:, 0]], scaled.sources[pairs[:, 1]])
     return accumulate(pairs[:, 0], K*scaled.charges[pairs[:, 1]], len(scaled.targets))
 
+def far_field(W, v, x, cheb, tree):
+    F = torch.zeros_like(W)
+    coeffs = pushdown_coeffs(cheb)
+    dot_dims = ((1,), (-1,))
+
+    parents = tree.parents.new_tensor([0])
+    while parents.nelement():
+        parents = parents[~tree.terminal[parents]]
+        children = tree.children[parents]
+        F[children] = torch.tensordot(F[parents], coeffs, dot_dims) + v[children] + x[children]
+        parents = children.flatten()
+    
+    return F
+
+def target_far_field(F, scaled, cheb, tree, indices):
+    loc = 2**tree.depths[indices.targets, None]*(scaled.sources - tree.centers[indices.targets])
+    S = cheb.similarity(loc, cheb.nodes)
+    return torch.einsum('ij,ij->i', S, F[indices.targets])
+
+def solve(prob):
+    scaled = scale(prob)
+    cheb = chebyshev.Chebyshev(4, scaled.sources.shape[1], device='cuda')
+
+    tree, indices = orthantree.build(scaled)
+    lists = orthantree.pairlists(tree)
+
+    W = weights(scaled, cheb, tree, indices)
+
+    v = v_interactions(W, scaled, cheb, tree, lists)
+    x = x_interactions(scaled, cheb, tree, indices, lists)
+
+    F = far_field(W, v, x, cheb, tree)
+
+    w = w_interactions(W, scaled, cheb, tree, indices, lists)
+    u = u_interactions(scaled, indices, lists)
+    f = target_far_field(F, scaled, cheb, tree, indices)
+
+    return f + w + u
+
 def run():
     torch.random.manual_seed(1)
     prob = aljpy.dotdict(
@@ -149,15 +172,5 @@ def run():
 
     prob = test.random_problem(S=100, T=100)
 
-    scaled = scale(prob)
-    cheb = chebyshev.Chebyshev(4, scaled.sources.shape[1], device='cuda')
+    soln = solve(prob)
 
-    tree, indices = orthantree.build(scaled)
-    lists = orthantree.pairlists(tree)
-
-    W = weights(scaled, cheb, tree, indices)
-    f = far_field(W, cheb, tree)
-    v = v_interactions(W, scaled, cheb, tree, lists)
-    x = x_interactions(scaled, cheb, tree, indices, lists)
-    w = w_interactions(W, scaled, cheb, tree, indices, lists)
-    u = u_interactions(scaled, indices, lists)
