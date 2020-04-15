@@ -6,6 +6,12 @@ def children(tree, indices, descent):
     subscripts = (descent + 1)/2
     return tree.children[(indices, *subscripts.T)]
 
+def unique_pairs(pairs):
+    base = pairs[:, 0].max()+1
+    pair_id = pairs[:, 0] + base*pairs[:, 1]
+    unique_id = torch.unique(pair_id)
+    return torch.stack([unique_id % base, unique_id // base], -1)
+
 def neighbours(tree, indices, directions):
     #TODO: This can be framed as a recursive scheme and then as a dynamic programming scheme. 
     # Should save a factor of log(n)
@@ -41,7 +47,8 @@ def u_list(tree, ds, ns):
     partner_is_larger = tree.depths[pairs[:, 0]] > tree.depths[pairs[:, 1]]
     smaller_partners = torch.flip(pairs[partner_is_larger], (1,))
     pairs = torch.cat([pairs, smaller_partners])
-    return pairs
+
+    return unique_pairs(pairs)
 
 def v_list(tree, ds, ns):
     """Children of the parent's colleagues that are separated from the node"""
@@ -62,7 +69,7 @@ def v_list(tree, ds, ns):
     pairs = torch.stack([bs[:, None, None].expand_as(friends), friends], -1)
     pairs = pairs[friends != -1]
 
-    return pairs
+    return unique_pairs(pairs)
 
 def w_list(tree, ds, ns):
     """For childless nodes, descendents of colleagues whose parents are adjacent but
@@ -95,7 +102,7 @@ def w_list(tree, ds, ns):
         directions = directions[:, None].repeat_interleave(2**D, 1)[mask]
     ws = torch.cat(ws)
 
-    return ws
+    return unique_pairs(ws)
 
 def lists(tree):
     D = tree.children.ndim-1
@@ -131,7 +138,7 @@ def y_list(tree, b):
     ys = leaves[~(leaves[:, None] == descendents[None, :]).any(-1)]
     return ys
 
-def ancestor_interactions(tree, b):
+def ancestor_interactions(tree, lists, b):
     import pandas as pd
 
     ancestors = [torch.as_tensor([b], device=tree.id.device)]
@@ -148,9 +155,27 @@ def ancestor_interactions(tree, b):
                 ixns.append((height, int(ancestor), k, int(ixn)))
     return pd.DataFrame(ixns, columns=['height', 'ancestor', 'list', 'partner'])
 
-def test_lists():
+def terminal_descendents(tree, bs):
+    bs = torch.as_tensor(bs, device=tree.id.device) 
+
+    terminal = [bs[tree.terminal[bs]]]
+    parents = bs[~tree.terminal[bs]]
+    while parents.nelement():
+        children = tree.children[parents].flatten()
+        parents = children[(children >= 0) & ~tree.terminal[children]]
+        terminal.append(children[(children >= 0) & tree.terminal[children]])
+    return torch.cat(terminal)
+
+def test_lists(tree, lists):
     # Generate a random problem
     # Get the tree
     # Get the lists
-    # Check that the partners of each node and its ancestors cover the grid
-    pass
+    # Check that the partners of each node and its ancestors partition the grid
+    bs = tree.terminal.nonzero().squeeze()
+    for b in bs:
+        print(f'Checking {b}')
+        ixns = ancestor_interactions(tree, lists, b)
+        terminal = terminal_descendents(tree, ixns.partner.values)
+
+        assert ixns.partner.value_counts().max() <= 1
+        assert tree.terminal.sum() == len(terminal)
