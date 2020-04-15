@@ -97,6 +97,34 @@ def w_list(tree, ds, ns):
 
     return ws
 
+def y_list(tree, b):
+    """Everything well-separated from the parent
+    
+    This isn't used in production, it's just for debugging. It should equal the compliment of the other lists"""
+    D = tree.children.ndim-1
+    ds = chebyshev.flat_cartesian_product(torch.tensor([-1, 0, +1], device=tree.id.device), D)
+
+    colleagues = torch.cat([neighbours(tree, tree.parents[[b]], d) for d in ds])
+
+    descendents = []
+    parents = colleagues
+    while parents.nelement():
+        children = tree.children[parents]
+        parents = children[children >= 0]
+        descendents.append(parents)
+
+    ancestors = []
+    children = colleagues
+    while children.nelement():
+        parents = tree.parents[children]
+        children = parents[parents >= 0]
+        ancestors.append(children)
+
+    neighbourhood = torch.cat(descendents + [colleagues] + ancestors)
+    ys = tree.id[~(tree.id[:, None] == neighbourhood[None, :]).any(-1)]
+    return ys
+
+
 def lists(tree):
     D = tree.children.ndim-1
     ds = chebyshev.flat_cartesian_product(torch.tensor([-1, 0, +1], device=tree.id.device), D)
@@ -109,3 +137,9 @@ def lists(tree):
     lists['x'] = torch.flip(lists['w'], (1,))
     return lists
 
+def test_lists():
+    # Generate a random problem
+    # Get the tree
+    # Get the lists
+    # Check that the partners of each node plus the Y list cover the grid
+    pass
