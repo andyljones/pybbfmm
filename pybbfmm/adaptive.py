@@ -144,6 +144,20 @@ def v_list(tree):
 
     return pairs
 
+def w_list(tree):
+    D = tree.children.ndim-1
+    bs = tree.terminal.nonzero().squeeze(1)
+    directions = chebyshev.flat_cartesian_product(torch.tensor([-1, 0, +1], device=bs.device), D)
+
+    adjacent = []
+    for d in directions:
+        adjacent.append(torch.cat([
+            bs[:, None], 
+            neighbours(tree, bs, d)[:, None],
+            d[None].repeat_interleave(len(bs), 0)], -1))
+    adjacent = torch.cat(adjacent, 0)
+    colleagues = adjacent[tree.depths[adjacent[:, 0]] == tree.depths[adjacent[:, 1]]]
+
 
 def interaction_lists(tree):
     pass
