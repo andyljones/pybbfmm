@@ -26,6 +26,39 @@ def accumulate(indices, vals, length):
     totals.index_add_(0, indices, vals)
     return totals
 
+def inner_product(A, B):
+    A_order = torch.argsort(A[:, 1])
+    A_sorted = A[A_order]
+    A_unique, A_inv, A_counts = torch.unique(A_sorted[:, 1], return_inverse=True, return_counts=True)
+
+    B_order = torch.argsort(B[:, 0])
+    B_sorted = B[B_order]
+    B_unique, B_inv, B_counts = torch.unique(B_sorted[:, 0], return_inverse=True, return_counts=True)
+
+    C_unique, C_inv = torch.unique(torch.cat([A_unique, B_unique]), return_inverse=True)
+    A_unique_inv, B_unique_inv = C_inv[:len(A_unique)], C_inv[len(A_unique):]
+
+    CA_counts = torch.zeros_like(C_unique)
+    CA_counts[A_unique_inv] = A_counts
+
+    CB_counts = torch.zeros_like(C_unique)
+    CB_counts[B_unique_inv] = B_counts
+
+    pairs = []
+    for A_reps in range(1, CA_counts.max()+1):
+        for B_reps in range(1, CB_counts.max()+1):
+            mask = (CA_counts == A_reps) & (CB_counts == B_reps)
+            
+            A_vals = A_sorted[mask[A_unique_inv[A_inv]], 0]
+            B_vals = B_sorted[mask[B_unique_inv[B_inv]], 1]
+
+            pairs.append(torch.stack([
+                torch.repeat_interleave(A_vals, B_reps),
+                torch.repeat_interleave(B_vals, A_reps)], -1))
+    pairs = torch.cat(pairs)
+
+    return pairs
+
 def uplift_coeffs(cheb):
     shifts = torch.tensor([-.5, +.5], device=cheb.device)
     shifts = chebyshev.cartesian_product(shifts, cheb.D)
