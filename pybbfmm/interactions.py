@@ -7,6 +7,8 @@ def children(tree, indices, descent):
     return tree.children[(indices, *subscripts.T)]
 
 def neighbours(tree, indices, directions):
+    #TODO: This can be framed as a recursive scheme and then as a dynamic programming scheme. 
+    # Should save a factor of log(n)
     indices = torch.as_tensor(indices, dtype=tree.parents.dtype, device=tree.parents.device)
     directions = torch.as_tensor(directions, dtype=tree.parents.dtype, device=tree.parents.device)
     directions = directions[None].repeat_interleave(len(indices), 0) if directions.ndim == 1 else directions
@@ -31,35 +33,30 @@ def neighbours(tree, indices, directions):
 
     return current
 
-def u_list(tree):
+def u_list(tree, ds, ns):
     """For childless nodes, the neighbouring childless nodes"""
-    D = tree.children.ndim-1
-    bs = tree.terminal.nonzero().squeeze(1)
-    directions = chebyshev.flat_cartesian_product(torch.tensor([-1, 0, +1], device=bs.device), D)
-    pairs = torch.cat([torch.stack([bs, neighbours(tree, bs, d)], -1) for d in directions])
-    pairs = pairs[(pairs >= 0).all(-1) & tree.terminal[pairs[:, 1]]]
+    pairs = torch.stack([tree.id[:, None].expand_as(ns), ns], -1)
+    pairs = pairs[(pairs >= 0).all(-1) & tree.terminal[pairs].all(-1)]
 
     partner_is_larger = tree.depths[pairs[:, 0]] > tree.depths[pairs[:, 1]]
     smaller_partners = torch.flip(pairs[partner_is_larger], (1,))
     pairs = torch.cat([pairs, smaller_partners])
     return pairs
 
-def v_list(tree):
+def v_list(tree, ds, ns):
     """Children of the parent's colleagues that are separated from the node"""
     #TODO: Improve the memory consumption of this thing.
     #TODO: Factor out the neighbours list comp, that's reused by all the lists
     D = tree.children.ndim-1
     bs = tree.id
-    parents = tree.parents[bs]
-    directions = chebyshev.flat_cartesian_product(torch.tensor([-1, 0, +1], device=bs.device), D)
-    directions = directions[(directions != 0).any(-1)]
-    colleagues = torch.stack([neighbours(tree, parents, d) for d in directions], -1)
+    nonzero = (ds != 0).any(-1)
+    colleagues = ns[tree.parents[tree.id]][:, nonzero]
 
     friends_descents = chebyshev.flat_cartesian_product(torch.tensor([-1, +1], device=bs.device), D)
     friends = torch.stack([children(tree, colleagues, d) for d in friends_descents], -1)
 
     own_descents = tree.descent[bs]
-    vector = -own_descents[:, None, None] + 4*directions[None, :, None] + friends_descents[None, None, :]
+    vector = -own_descents[:, None, None] + 4*ds[None, nonzero, None] + friends_descents[None, None, :]
     friends[(vector.abs() <= 2).all(-1)] = -1
 
     pairs = torch.stack([bs[:, None, None].expand_as(friends), friends], -1)
@@ -67,7 +64,7 @@ def v_list(tree):
 
     return pairs
 
-def w_list(tree):
+def w_list(tree, ds, ns):
     """For childless nodes, descendents of colleagues whose parents are adjacent but
     which aren't themselves"""
     D = tree.children.ndim-1
@@ -75,12 +72,12 @@ def w_list(tree):
     ds = chebyshev.flat_cartesian_product(torch.tensor([-1, 0, +1], device=bs.device), D)
 
     origins, colleagues, directions = [], [], []
-    for d in ds:
-        ns = neighbours(tree, bs, d)
-        is_colleague = (tree.depths[bs] == tree.depths[ns])
-        valid = is_colleague & ~tree.terminal[ns]
+    for d, dns in zip(ds, ns.T):
+        dns = dns[bs]
+        is_colleague = (tree.depths[bs] == tree.depths[dns])
+        valid = is_colleague & ~tree.terminal[dns]
         origins.append(bs[valid])
-        colleagues.append(ns[valid])
+        colleagues.append(dns[valid])
         directions.append(d[None].repeat_interleave(valid.sum(), 0))
     origins, colleagues, directions = torch.cat(origins), torch.cat(colleagues), torch.cat(directions, 0)
 
@@ -101,10 +98,14 @@ def w_list(tree):
     return ws
 
 def lists(tree):
+    D = tree.children.ndim-1
+    ds = chebyshev.flat_cartesian_product(torch.tensor([-1, 0, +1], device=tree.id.device), D)
+    ns = torch.stack([neighbours(tree, tree.id, d) for d in ds], -1)
+
     lists = arrdict.arrdict(
-                        u=u_list(tree),
-                        v=v_list(tree),
-                        w=w_list(tree))
+                        u=u_list(tree, ds, ns),
+                        v=v_list(tree, ds, ns),
+                        w=w_list(tree, ds, ns))
     lists['x'] = torch.flip(lists['w'], (1,))
     return lists
 
