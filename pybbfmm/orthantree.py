@@ -69,6 +69,8 @@ def children(tree, indices, descent):
     return tree.children[(indices, *subscripts.T)]
 
 def unique_pairs(pairs):
+    if len(pairs) == 0:
+        return pairs
     base = pairs[:, 0].max()+1
     pair_id = pairs[:, 0] + base*pairs[:, 1]
     unique_id = torch.unique(pair_id)
@@ -149,7 +151,7 @@ def w_pairs(tree, ds, ns):
         directions.append(d[None].repeat_interleave(valid.sum(), 0))
     origins, colleagues, directions = torch.cat(origins), torch.cat(colleagues), torch.cat(directions, 0)
 
-    ws = []
+    ws = [origins.new_empty((0, 2))]
     parents = colleagues
     while parents.nelement():
         friends = tree.children[parents].reshape(-1, 2**D)

@@ -38,6 +38,9 @@ def inner_join(A, B):
     
     Which is to say, it's an inner join. 
     """
+    if (len(A) == 0) or (len(B) == 0):
+        return A[:0]
+
     A_order = torch.argsort(A[:, 1])
     A_sorted = A[A_order]
     A_unique, A_inv, A_counts = torch.unique(A_sorted[:, 1], return_inverse=True, return_counts=True)
@@ -104,24 +107,24 @@ def node_points(scaled, cheb, tree, indices):
 def v_interactions(W, scaled, cheb, tree, lists):
     nodes = node_points(scaled, cheb, tree, lists.v)
     K = KERNEL(nodes[:, 0, :, None], nodes[:, 1, None, :])
-    ixns = torch.einsum('ijk,ik->ij', K, W[lists.v[:, 1]])
+    ixns = torch.einsum('ijk,ik->ij', K, W[lists.v[:, 1]]) if len(lists.v) > 0 else W[:0]
     return accumulate(lists.v[:, 0], ixns, len(tree.id))
 
 def x_interactions(scaled, cheb, tree, indices, lists):
     pairs = inner_join(lists.x, right_index(indices.sources))
-    K = KERNEL(node_points(scaled, cheb, tree, pairs[:, 0]), scaled.sources[pairs[:, 1], None, :])
+    K = KERNEL(node_points(scaled, cheb, tree, pairs[:, 0]), scaled.scale*scaled.sources[pairs[:, 1], None, :])
     ixns = K*scaled.charges[pairs[:, 1], None]
     return accumulate(pairs[:, 0], ixns, len(tree.id))
 
 def w_interactions(W, scaled, cheb, tree, indices, lists):
     pairs = inner_join(lists.w, right_index(indices.targets))
-    K = KERNEL(scaled.targets[pairs[:, 1], None, :], node_points(scaled, cheb, tree, pairs[:, 0]))
-    ixns = torch.einsum('ij,ij->i', K, W[pairs[:, 0]])
+    K = KERNEL(scaled.scale*scaled.targets[pairs[:, 1], None, :], node_points(scaled, cheb, tree, pairs[:, 0]))
+    ixns = torch.einsum('ij,ij->i', K, W[pairs[:, 0]]) if len(pairs) > 0 else scaled.charges[:0]
     return accumulate(pairs[:, 1], ixns, len(indices.targets))
 
 def u_interactions(scaled, indices, lists):
     pairs = inner_join(left_index(indices.targets), right_index(indices.sources))
-    K = KERNEL(scaled.targets[pairs[:, 0]], scaled.sources[pairs[:, 1]])
+    K = KERNEL(scaled.scale*scaled.targets[pairs[:, 0]], scaled.scale*scaled.sources[pairs[:, 1]])
     return accumulate(pairs[:, 0], K*scaled.charges[pairs[:, 1]], len(scaled.targets))
 
 def far_field(W, v, x, cheb, tree):
@@ -139,9 +142,9 @@ def far_field(W, v, x, cheb, tree):
     return F
 
 def target_far_field(F, scaled, cheb, tree, indices):
-    loc = 2**tree.depths[indices.targets, None]*(scaled.sources - tree.centers[indices.targets])
+    loc = 2**tree.depths[indices.targets, None]*(scaled.targets - tree.centers[indices.targets])
     S = cheb.similarity(loc, cheb.nodes)
-    return torch.einsum('ij,ij->i', S, F[indices.targets])
+    return torch.einsum('ij,ij->i', S, F[indices.targets]) if len(indices.targets) > 0 else scaled.charges[:0]
 
 def solve(prob):
     scaled = scale(prob)
