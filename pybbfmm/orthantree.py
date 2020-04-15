@@ -60,7 +60,7 @@ def build(scaled, cutoff=5):
 
     indices = arrdict.arrdict(
         sources=indices[:len(scaled.sources)],
-        targets=indices[:len(scaled.targets)])
+        targets=indices[-len(scaled.targets):])
 
     return tree, indices
 

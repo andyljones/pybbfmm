@@ -123,7 +123,8 @@ def w_interactions(W, scaled, cheb, tree, indices, lists):
     return accumulate(pairs[:, 1], ixns, len(indices.targets))
 
 def u_interactions(scaled, indices, lists):
-    pairs = inner_join(left_index(indices.targets), right_index(indices.sources))
+    pairs = inner_join(lists.u, right_index(indices.sources))
+    pairs = inner_join(left_index(indices.targets), pairs)
     K = KERNEL(scaled.scale*scaled.targets[pairs[:, 0]], scaled.scale*scaled.sources[pairs[:, 1]])
     return accumulate(pairs[:, 0], K*scaled.charges[pairs[:, 1]], len(scaled.targets))
 
