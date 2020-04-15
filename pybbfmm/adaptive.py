@@ -67,8 +67,8 @@ def inner_join(A, B):
             B_vals = B_sorted[mask[B_unique_inv[B_inv]], 1]
 
             pairs.append(torch.stack([
-                torch.repeat_interleave(A_vals, B_reps),
-                torch.repeat_interleave(B_vals, A_reps)], -1))
+                A_vals.reshape(mask.sum(), A_reps, 1).repeat_interleave(B_reps, 2).flatten(),
+                B_vals.reshape(mask.sum(), 1, B_reps).repeat_interleave(A_reps, 1).flatten()], -1))
     pairs = torch.cat(pairs)
 
     return pairs
@@ -155,26 +155,17 @@ def solve(prob):
     lists = orthantree.pairlists(tree)
 
     W = weights(scaled, cheb, tree, indices)
-
     v = v_interactions(W, scaled, cheb, tree, lists)
     x = x_interactions(scaled, cheb, tree, indices, lists)
-
-    F = far_field(W, v, x, cheb, tree)
-
     w = w_interactions(W, scaled, cheb, tree, indices, lists)
     u = u_interactions(scaled, indices, lists)
+    F = far_field(W, v, x, cheb, tree)
     f = target_far_field(F, scaled, cheb, tree, indices)
 
     return f + w + u
 
 def run():
-    torch.random.manual_seed(1)
-    prob = aljpy.dotdict(
-        sources=torch.tensor([[-.4, .4], [-.8, .8]]),
-        charges=torch.tensor([1., 1.]),
-        targets=torch.empty((0, 2)))
-
     prob = test.random_problem(S=100, T=100)
-
     soln = solve(prob)
-
+    ref = test.solve(prob)
+    (soln - ref).pow(2).sum()/ref.pow(2).sum()
