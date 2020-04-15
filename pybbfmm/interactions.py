@@ -106,22 +106,15 @@ def y_list(tree, b):
 
     colleagues = torch.cat([neighbours(tree, tree.parents[[b]], d) for d in ds])
 
-    descendents = []
-    parents = colleagues
-    while parents.nelement():
-        children = tree.children[parents]
+    # A leaf is well-separated from b's parent if it's not a descendent of the colleagues.
+    descendents = [colleagues]
+    while descendents[-1].nelement():
+        children = tree.children[descendents[-1]]
         parents = children[children >= 0]
         descendents.append(parents)
-
-    ancestors = []
-    children = colleagues
-    while children.nelement():
-        parents = tree.parents[children]
-        children = parents[parents >= 0]
-        ancestors.append(children)
-
-    neighbourhood = torch.cat(descendents + [colleagues] + ancestors)
-    ys = tree.id[~(tree.id[:, None] == neighbourhood[None, :]).any(-1)]
+    descendents = torch.cat(descendents)
+    leaves = tree.terminal.nonzero().squeeze(1)
+    ys = leaves[~(leaves[:, None] == descendents[None, :]).any(-1)]
     return ys
 
 

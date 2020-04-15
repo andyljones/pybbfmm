@@ -132,9 +132,10 @@ def run():
 
     lists = interactions.lists(tree)
 
-    b = 159
-    color = {'u': 'C0', 'v': 'C1', 'w': 'C2', 'x': 'C3'}
+    b = int(tree.terminal.nonzero().squeeze(-1)[0])
+    color = {'u': 'C0', 'v': 'C1', 'w': 'C2', 'x': 'C3', 'y': 'C4'}
     key = {k: mpl.patches.Rectangle((0., 0.), 1, 1, color=c, alpha=.25) for k, c in color.items()}
     color = {color[k]: l[l[:, 0] == b, 1] for k, l in lists.items()}
+    color['C4'] = interactions.y_list(tree, b)
     ax = plot_tree(tree, color=color)
     ax.legend(key.values(), key.keys())
