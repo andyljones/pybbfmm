@@ -53,7 +53,6 @@ def u_list(tree, ds, ns):
 def v_list(tree, ds, ns):
     """Children of the parent's colleagues that are separated from the node"""
     #TODO: Improve the memory consumption of this thing.
-    #TODO: Factor out the neighbours list comp, that's reused by all the lists
     D = tree.children.ndim-1
     bs = tree.id
     nonzero = (ds != 0).any(-1)
