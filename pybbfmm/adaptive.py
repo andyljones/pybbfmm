@@ -41,29 +41,29 @@ def weights(scaled, cheb, tree, indices):
 def node_locations(scaled, cheb, tree, indices):
     return scaled.scale*(cheb.nodes[None]/2**tree.depths[indices, None, None] + tree.centers[indices, None, :])
 
-def v_interactions(W, scaled, cheb, tree, lists):
-    # vectors = tree.centers[lists.v[:, 0]] - tree.centers[lists.v[:, 1]]
+def v_interactions(W, scaled, cheb, tree, scheme):
+    # vectors = tree.centers[scheme.lists.v[:, 0]] - tree.centers[scheme.lists.v[:, 1]]
     # vectors, inv = unique_vectors(vectors, tree.depths.max())
 
-    nodes = node_locations(scaled, cheb, tree, lists.v)
+    nodes = node_locations(scaled, cheb, tree, scheme.lists.v)
     K = KERNEL(nodes[:, 0, :, None], nodes[:, 1, None, :])
-    ixns = torch.einsum('ijk,ik->ij', K, W[lists.v[:, 1]]) if len(lists.v) > 0 else W[:0]
-    return sets.accumulate(lists.v[:, 0], ixns, len(tree.id))
+    ixns = torch.einsum('ijk,ik->ij', K, W[scheme.lists.v[:, 1]]) if len(scheme.lists.v) > 0 else W[:0]
+    return sets.accumulate(scheme.lists.v[:, 0], ixns, len(tree.id))
 
-def x_interactions(scaled, cheb, tree, indices, lists):
-    pairs = sets.inner_join(lists.x, sets.right_index(indices.sources))
+def x_interactions(scaled, cheb, tree, indices, scheme):
+    pairs = sets.inner_join(scheme.lists.x, sets.right_index(indices.sources))
     K = KERNEL(node_locations(scaled, cheb, tree, pairs[:, 0]), scaled.scale*scaled.sources[pairs[:, 1], None, :])
     ixns = K*scaled.charges[pairs[:, 1], None]
     return sets.accumulate(pairs[:, 0], ixns, len(tree.id))
 
-def w_interactions(W, scaled, cheb, tree, indices, lists):
-    pairs = sets.inner_join(sets.left_index(indices.targets), lists.w)
+def w_interactions(W, scaled, cheb, tree, indices, scheme):
+    pairs = sets.inner_join(sets.left_index(indices.targets), scheme.lists.w)
     K = KERNEL(scaled.scale*scaled.targets[pairs[:, 0], None, :], node_locations(scaled, cheb, tree, pairs[:, 1]))
     ixns = torch.einsum('ij,ij->i', K, W[pairs[:, 1]]) if len(pairs) > 0 else scaled.charges[:0]
     return sets.accumulate(pairs[:, 0], ixns, len(indices.targets))
 
-def u_interactions(scaled, indices, lists):
-    pairs = sets.inner_join(lists.u, sets.right_index(indices.sources))
+def u_interactions(scaled, indices, scheme):
+    pairs = sets.inner_join(scheme.lists.u, sets.right_index(indices.sources))
     pairs = sets.inner_join(sets.left_index(indices.targets), pairs)
     K = KERNEL(scaled.scale*scaled.targets[pairs[:, 0]], scaled.scale*scaled.sources[pairs[:, 1]])
     return sets.accumulate(pairs[:, 0], K*scaled.charges[pairs[:, 1]], len(scaled.targets))
@@ -91,18 +91,18 @@ def solve(prob):
     cheb = chebyshev.Chebyshev(4, prob.sources.shape[1], device='cuda')
     scaled = scale(prob)
     tree, indices = orthantree.orthantree(scaled)
-    lists = orthantree.interaction_lists(tree)
+    scheme = orthantree.interaction_scheme(tree)
 
     W = weights(scaled, cheb, tree, indices)
 
-    v = v_interactions(W, scaled, cheb, tree, lists)
-    x = x_interactions(scaled, cheb, tree, indices, lists)
+    v = v_interactions(W, scaled, cheb, tree, scheme)
+    x = x_interactions(scaled, cheb, tree, indices, scheme)
 
     F = far_field(W, v, x, cheb, tree)
     f = target_far_field(F, scaled, cheb, tree, indices)
 
-    w = w_interactions(W, scaled, cheb, tree, indices, lists)
-    u = u_interactions(scaled, indices, lists)
+    w = w_interactions(W, scaled, cheb, tree, indices, scheme)
+    u = u_interactions(scaled, indices, scheme)
 
     return f + w + u
 

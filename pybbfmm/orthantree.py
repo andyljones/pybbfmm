@@ -104,14 +104,11 @@ def u_pairs(tree, directions, neighbours):
     partner_is_larger = tree.depths[pairs[:, 0]] > tree.depths[pairs[:, 1]]
     smaller_partners = torch.flip(pairs[partner_is_larger], (1,))
     pairs = torch.cat([pairs, smaller_partners])
-
-    return sets.unique_rows(pairs)
+    pairs, _ = sets.unique_rows(pairs)
+    return pairs
 
 def v_pairs(tree, directions, neighbours):
     """Children of the parent's colleagues that are separated from the box"""
-    #TODO: Improve the memory consumption of this thing.
-    # Want:
-    # * 
     D = tree.children.ndim-1
     bs = tree.id
     nonzero = (directions != 0).any(-1)
@@ -121,14 +118,23 @@ def v_pairs(tree, directions, neighbours):
     friends = torch.stack([child_boxes(tree, colleagues, d) for d in friends_descents], -1)
 
     own_descents = tree.descent[bs]
-    vectors = -own_descents[:, None, None] + 4*directions[None, nonzero, None] + friends_descents[None, None, :]
-    friends[(vectors.abs() <= 2).all(-1)] = -1
+    offsets = -own_descents[:, None, None] + 4*directions[None, nonzero, None] + friends_descents[None, None, :]
+    friends[(offsets.abs() <= 2).all(-1)] = -1
 
     pairs = torch.stack([bs[:, None, None].expand_as(friends), friends], -1)
     pairs = pairs[friends != -1]
-    vectors = vectors[friends != -1]
+    offsets = offsets[friends != -1]
 
-    return pairs
+    offset_depth = torch.cat([offsets, tree.depths[pairs[:, 0], None]], -1)
+    offset_depths, inverse = sets.unique_rows(offset_depth)
+    vectors = arrdict.arrdict(
+        inverse=inverse,
+        offsets=offset_depths[:, :2],
+        depths=offset_depths[:, 2])
+
+    # No need to assure uniqueness; if a parent's colleague has a child, then it'll necessarily only turn up in
+    # the neighbours list once.
+    return pairs, vectors
 
 def w_pairs(tree, directions, neighbours):
     """For childless boxes, descendents of colleagues whose parents are adjacent but
@@ -146,33 +152,36 @@ def w_pairs(tree, directions, neighbours):
         dirs.append(d[None].repeat_interleave(valid.sum(), 0))
     origins, colleagues, dirs = torch.cat(origins), torch.cat(colleagues), torch.cat(dirs, 0)
 
-    ws = [origins.new_empty((0, 2))]
+    pairs = [origins.new_empty((0, 2))]
     parents = colleagues
     while parents.nelement():
         friends = tree.children[parents].reshape(-1, 2**D)
         distant = (tree.descent[friends] == dirs[:, None, :]).any(-1)
         
-        pairs = torch.stack([origins[:, None].expand_as(friends), friends], -1)
-        ws.append(pairs[distant])
+        ps = torch.stack([origins[:, None].expand_as(friends), friends], -1)
+        pairs.append(ps[distant])
         
         mask = ~distant & ~tree.terminal[friends]
-        origins, parents = pairs[mask].T
+        origins, parents = ps[mask].T
         dirs = dirs[:, None].repeat_interleave(2**D, 1)[mask]
-    ws = torch.cat(ws)
+    pairs = torch.cat(pairs)
 
-    return sets.unique_rows(ws)
+    pairs, _ = sets.unique_rows(pairs)
+    return pairs
 
-def interaction_lists(tree):
+def interaction_scheme(tree):
     D = tree.children.ndim-1
     directions = sets.flat_cartesian_product(torch.tensor([-1, 0, +1], device=tree.id.device), D)
     neighbours = torch.stack([neighbour_boxes(tree, tree.id, d) for d in directions], -1)
 
-    lists = arrdict.arrdict(
-                        u=u_pairs(tree, directions, neighbours),
-                        v=v_pairs(tree, directions, neighbours),
-                        w=w_pairs(tree, directions, neighbours))
-    lists['x'] = torch.flip(lists['w'], (1,))
-    return lists
+    u = u_pairs(tree, directions, neighbours)
+    v, v_vectors = v_pairs(tree, directions, neighbours)
+    w = w_pairs(tree, directions, neighbours)
+    x = w.flip((1,))
+
+    return arrdict.arrdict(
+        lists=arrdict.arrdict(v=v, u=u, w=w, x=x), 
+        v_vectors=v_vectors)
 
 ## TEST
 
@@ -224,15 +233,16 @@ def terminal_descendents(tree, bs):
         terminal.append(children[(children >= 0) & tree.terminal[children]])
     return torch.cat(terminal)
 
-def test_lists(tree, lists):
+def test_lists(tree):
     # Generate a random problem
     # Get the tree
     # Get the lists
     # Check that the partners of each box and its ancestors partition the grid
+    scheme = interaction_scheme(tree)
     bs = tree.terminal.nonzero().squeeze()
     for b in bs:
         print(f'Checking {b}')
-        ixns = ancestor_interactions(tree, lists, b)
+        ixns = ancestor_interactions(tree, scheme.lists, b)
         terminal = terminal_descendents(tree, ixns.partner.values)
 
         assert ixns.partner.value_counts().max() <= 1
