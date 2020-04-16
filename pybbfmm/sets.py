@@ -7,14 +7,6 @@ def cartesian_product(xs, D):
 def flat_cartesian_product(xs, D):
     return cartesian_product(xs, D).reshape(-1, D)
 
-def unique_pairs(pairs):
-    if len(pairs) == 0:
-        return pairs
-    base = pairs[:, 0].max()+1
-    pair_id = pairs[:, 0] + base*pairs[:, 1]
-    unique_id = torch.unique(pair_id)
-    return torch.stack([unique_id % base, unique_id // base], -1)
-
 def left_index(A):
     return torch.stack([torch.arange(len(A), dtype=A.dtype, device=A.device), A], -1)
 
@@ -67,3 +59,23 @@ def accumulate(indices, vals, length):
     totals.index_add_(0, indices, vals)
     return totals
 
+def as_linear_index(subscripts):
+    breadth = subscripts.max(0).values + 1
+    bases = breadth.cumprod(0).div(breadth).flip((0,))
+    return (subscripts*bases).sum(-1), bases
+
+def as_subscripts(linear, bases):
+    coords = []
+    for b in bases[:-1]:
+        coords.append(linear // b)
+        linear = linear - b*coords[-1]
+    return torch.stack(coords + [linear], -1)
+
+def unique_rows(rows):
+    mins = rows.min(0).values
+    subscripts = rows - mins
+    linear, bases = as_linear_index(subscripts)
+
+    unique, inv = torch.unique(linear, return_inverse=True)
+    unique = as_subscripts(unique, bases) + mins
+    return unique, inv

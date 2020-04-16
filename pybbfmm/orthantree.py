@@ -105,7 +105,7 @@ def u_pairs(tree, directions, neighbours):
     smaller_partners = torch.flip(pairs[partner_is_larger], (1,))
     pairs = torch.cat([pairs, smaller_partners])
 
-    return sets.unique_pairs(pairs)
+    return sets.unique_rows(pairs)
 
 def v_pairs(tree, directions, neighbours):
     """Children of the parent's colleagues that are separated from the box"""
@@ -121,13 +121,14 @@ def v_pairs(tree, directions, neighbours):
     friends = torch.stack([child_boxes(tree, colleagues, d) for d in friends_descents], -1)
 
     own_descents = tree.descent[bs]
-    vector = -own_descents[:, None, None] + 4*directions[None, nonzero, None] + friends_descents[None, None, :]
-    friends[(vector.abs() <= 2).all(-1)] = -1
+    vectors = -own_descents[:, None, None] + 4*directions[None, nonzero, None] + friends_descents[None, None, :]
+    friends[(vectors.abs() <= 2).all(-1)] = -1
 
     pairs = torch.stack([bs[:, None, None].expand_as(friends), friends], -1)
     pairs = pairs[friends != -1]
+    vectors = vectors[friends != -1]
 
-    return sets.unique_pairs(pairs)
+    return pairs
 
 def w_pairs(tree, directions, neighbours):
     """For childless boxes, descendents of colleagues whose parents are adjacent but
@@ -159,7 +160,7 @@ def w_pairs(tree, directions, neighbours):
         dirs = dirs[:, None].repeat_interleave(2**D, 1)[mask]
     ws = torch.cat(ws)
 
-    return sets.unique_pairs(ws)
+    return sets.unique_rows(ws)
 
 def interaction_lists(tree):
     D = tree.children.ndim-1

@@ -37,32 +37,6 @@ def weights(scaled, cheb, tree, indices):
 
     return W
 
-def linear_coord(coords, max_depth):
-    D = coords.shape[1]
-    dims = torch.arange(D-1, -1, -1, dtype=coords.dtype, device=coords.device)
-    bases = 2**(max_depth*dims)
-    return (coords*bases).sum(-1), bases
-
-def integer_coords(vectors, max_depth):
-    return (2**(max_depth-2)*(vectors + 2)).int()
-
-def float_coords(vectors, max_depth):
-    return vectors.float()/2**(max_depth-2) - 2
-
-def conventional_coords(linear, bases):
-    coords = []
-    for b in bases[:-1]:
-        coords.append(linear // b)
-        linear = linear - b*coords[-1]
-    return torch.stack(coords + [linear], -1)
-
-def unique_vectors(vectors, max_depth):
-    coords = integer_coords(vectors, max_depth)
-    linear, bases = linear_coord(coords, max_depth)
-
-    unique, inv = torch.unique(linear, return_inverse=True)
-    unique = conventional_coords(unique, bases)
-    return float_coords(unique, max_depth), inv
 
 def node_locations(scaled, cheb, tree, indices):
     return scaled.scale*(cheb.nodes[None]/2**tree.depths[indices, None, None] + tree.centers[indices, None, :])
