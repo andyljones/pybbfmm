@@ -44,8 +44,8 @@ def node_locations(scaled, cheb, tree, indices):
 def v_interactions(W, scaled, cheb, tree, scheme):
     offsets = scheme.v_vectors.offsets[:, None, None]
     scales = scaled.scale/2**scheme.v_vectors.depths[:, None, None, None]
-    boxes = scales*cheb.nodes[None, None, :]/2
-    partners = scales*(offsets + cheb.nodes[None, :, None]/2)
+    boxes = scales*cheb.nodes[None, None, :]
+    partners = scales*(offsets + cheb.nodes[None, :, None])
     K = KERNEL(boxes, partners) 
 
     ixns = torch.zeros_like(W) 
