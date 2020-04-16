@@ -42,13 +42,18 @@ def node_locations(scaled, cheb, tree, indices):
     return scaled.scale*(cheb.nodes[None]/2**tree.depths[indices, None, None] + tree.centers[indices, None, :])
 
 def v_interactions(W, scaled, cheb, tree, scheme):
-    # vectors = tree.centers[scheme.lists.v[:, 0]] - tree.centers[scheme.lists.v[:, 1]]
-    # vectors, inv = unique_vectors(vectors, tree.depths.max())
+    offsets = scheme.v_vectors.offsets[:, None, None]
+    scales = scaled.scale/2**scheme.v_vectors.depths[:, None, None, None]
+    boxes = scales*cheb.nodes[None, None, :]/2
+    partners = scales*(offsets + cheb.nodes[None, :, None]/2)
+    K = KERNEL(boxes, partners) 
 
-    nodes = node_locations(scaled, cheb, tree, scheme.lists.v)
-    K = KERNEL(nodes[:, 0, :, None], nodes[:, 1, None, :])
-    ixns = torch.einsum('ijk,ik->ij', K, W[scheme.lists.v[:, 1]]) if len(scheme.lists.v) > 0 else W[:0]
-    return sets.accumulate(scheme.lists.v[:, 0], ixns, len(tree.id))
+    ixns = torch.zeros_like(W) 
+    for i, k in enumerate(K):
+        mask = (scheme.v_vectors.inverse == i)
+        vs = scheme.lists.v[mask]
+        ixns.index_add_(0, vs[:, 0], W[vs[:, 1]] @ k)
+    return ixns
 
 def x_interactions(scaled, cheb, tree, indices, scheme):
     pairs = sets.inner_join(scheme.lists.x, sets.right_index(indices.sources))

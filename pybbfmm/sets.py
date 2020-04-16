@@ -72,6 +72,8 @@ def as_subscripts(linear, bases):
     return torch.stack(coords + [linear], -1)
 
 def unique_rows(rows):
+    if len(rows) == 0:
+        return rows, rows.new_empty((0,))
     mins = rows.min(0).values
     subscripts = rows - mins
     linear, bases = as_linear_index(subscripts)
