@@ -100,11 +100,11 @@ def u_pairs(tree, directions, neighbours):
     """For childless boxes, the neighbouring childless boxes"""
     pairs = torch.stack([tree.id[:, None].expand_as(neighbours), neighbours], -1)
     pairs = pairs[(pairs >= 0).all(-1) & tree.terminal[pairs].all(-1)]
+    pairs, _ = sets.unique_rows(pairs)
 
     partner_is_larger = tree.depths[pairs[:, 0]] > tree.depths[pairs[:, 1]]
     smaller_partners = torch.flip(pairs[partner_is_larger], (1,))
     pairs = torch.cat([pairs, smaller_partners])
-    pairs, _ = sets.unique_rows(pairs)
     return pairs
 
 def v_pairs(tree, directions, neighbours):
@@ -112,29 +112,38 @@ def v_pairs(tree, directions, neighbours):
     D = tree.children.ndim-1
     bs = tree.id
     nonzero = (directions != 0).any(-1)
-    colleagues = neighbours[tree.parents[tree.id]][:, nonzero]
-
     friends_descents = sets.flat_cartesian_product(torch.tensor([-1, +1], device=bs.device), D)
-    friends = torch.stack([child_boxes(tree, colleagues, d) for d in friends_descents], -1)
 
-    own_descents = tree.descent[bs]
-    offsets = -own_descents[:, None, None] + 4*directions[None, nonzero, None] + friends_descents[None, None, :]
-    friends[(offsets.abs() <= 2).all(-1)] = -1
+    # The v list is many times bigger than the other lists, so we'll go one direction at a time
+    # to preserve memory.
+    pairs, inverse, offset_depths = [], [], []
+    for i in nonzero.nonzero().squeeze(1):
+        colleagues = neighbours[tree.parents[tree.id], i]
+        friends = torch.stack([child_boxes(tree, colleagues, d) for d in friends_descents], -1)
 
-    pairs = torch.stack([bs[:, None, None].expand_as(friends), friends], -1)
-    pairs = pairs[friends != -1]
-    offsets = offsets[friends != -1]
+        own_descents = tree.descent[bs]
+        offsets = -own_descents[:, None] + 4*directions[i] + friends_descents[None, :]
+        friends[(offsets.abs() <= 2).all(-1)] = -1
 
-    offset_depth = torch.cat([offsets, tree.depths[pairs[:, 0], None]], -1)
-    offset_depths, inverse = sets.unique_rows(offset_depth)
+        ps = torch.stack([bs[:, None].expand_as(friends), friends], -1)
+        ps = ps[friends != -1]
+        offsets = offsets[friends != -1]
+
+        offset_depth = torch.cat([offsets, tree.depths[ps[:, 0], None]], -1)
+        offset_depth, inv = sets.unique_rows(offset_depth)
+
+        pairs.append(ps)
+        inverse.append(inv + sum(map(len, offset_depths)))
+        offset_depths.append(offset_depth)
+        
     vectors = arrdict.arrdict(
-        inverse=inverse,
-        offsets=offset_depths[:, :2],
-        depths=offset_depths[:, 2])
+        inverse=torch.cat(inverse),
+        offsets=torch.cat(offset_depths)[:, :2],
+        depths=torch.cat(offset_depths)[:, 2])
 
     # No need to assure uniqueness; if a parent's colleague has a child, then it'll necessarily only turn up in
     # the neighbours list once.
-    return pairs, vectors
+    return torch.cat(pairs), vectors
 
 def w_pairs(tree, directions, neighbours):
     """For childless boxes, descendents of colleagues whose parents are adjacent but

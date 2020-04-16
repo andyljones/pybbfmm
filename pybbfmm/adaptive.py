@@ -37,7 +37,6 @@ def weights(scaled, cheb, tree, indices):
 
     return W
 
-
 def node_locations(scaled, cheb, tree, indices):
     return scaled.scale*(cheb.nodes[None]/2**tree.depths[indices, None, None] + tree.centers[indices, None, :])
 
