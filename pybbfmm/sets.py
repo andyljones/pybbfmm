@@ -60,7 +60,7 @@ def accumulate(indices, vals, length):
     return totals
 
 def as_linear_index(subscripts):
-    breadth = subscripts.max(0).values + 1
+    breadth = (subscripts.max(0).values + 1).flip((0,))
     bases = breadth.cumprod(0).div(breadth).flip((0,))
     return (subscripts*bases).sum(-1), bases
 
