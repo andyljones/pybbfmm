@@ -128,27 +128,27 @@ def unique_vectors(vectors, max_depth):
     unique = conventional_coords(unique, bases)
     return float_coords(unique, max_depth), inv
 
-def node_points(scaled, cheb, tree, indices):
+def node_locations(scaled, cheb, tree, indices):
     return scaled.scale*(cheb.nodes[None]/2**tree.depths[indices, None, None] + tree.centers[indices, None, :])
 
 def v_interactions(W, scaled, cheb, tree, lists):
-    vectors = tree.centers[lists.v[:, 0]] - tree.centers[lists.v[:, 1]]
-    vectors, inv = unique_vectors(vectors, tree.depths.max())
+    # vectors = tree.centers[lists.v[:, 0]] - tree.centers[lists.v[:, 1]]
+    # vectors, inv = unique_vectors(vectors, tree.depths.max())
 
-    nodes = node_points(scaled, cheb, tree, lists.v)
+    nodes = node_locations(scaled, cheb, tree, lists.v)
     K = KERNEL(nodes[:, 0, :, None], nodes[:, 1, None, :])
     ixns = torch.einsum('ijk,ik->ij', K, W[lists.v[:, 1]]) if len(lists.v) > 0 else W[:0]
     return accumulate(lists.v[:, 0], ixns, len(tree.id))
 
 def x_interactions(scaled, cheb, tree, indices, lists):
     pairs = inner_join(lists.x, right_index(indices.sources))
-    K = KERNEL(node_points(scaled, cheb, tree, pairs[:, 0]), scaled.scale*scaled.sources[pairs[:, 1], None, :])
+    K = KERNEL(node_locations(scaled, cheb, tree, pairs[:, 0]), scaled.scale*scaled.sources[pairs[:, 1], None, :])
     ixns = K*scaled.charges[pairs[:, 1], None]
     return accumulate(pairs[:, 0], ixns, len(tree.id))
 
 def w_interactions(W, scaled, cheb, tree, indices, lists):
     pairs = inner_join(left_index(indices.targets), lists.w)
-    K = KERNEL(scaled.scale*scaled.targets[pairs[:, 0], None, :], node_points(scaled, cheb, tree, pairs[:, 1]))
+    K = KERNEL(scaled.scale*scaled.targets[pairs[:, 0], None, :], node_locations(scaled, cheb, tree, pairs[:, 1]))
     ixns = torch.einsum('ij,ij->i', K, W[pairs[:, 1]]) if len(pairs) > 0 else scaled.charges[:0]
     return accumulate(pairs[:, 0], ixns, len(indices.targets))
 
@@ -181,7 +181,7 @@ def solve(prob):
     cheb = chebyshev.Chebyshev(4, prob.sources.shape[1], device='cuda')
     scaled = scale(prob)
     tree, indices = orthantree.build(scaled)
-    lists = orthantree.pairlists(tree)
+    lists = orthantree.interaction_lists(tree)
 
     W = weights(scaled, cheb, tree, indices)
     v = v_interactions(W, scaled, cheb, tree, lists)

@@ -38,8 +38,8 @@ def build(scaled, cutoff=5):
         active_inv = (used_is_active.cumsum(0) - used_is_active.long())[used_inv[point_is_active]]
         first_child = len(tree.parents) + 2**D*torch.arange(len(active), device=active.device)
         point_offset = ((points[point_is_active] >= tree.centers[active][active_inv])*bases).sum(-1)
-        child_node = first_child[active_inv] + point_offset
-        indices[point_is_active] = child_node
+        child_box = first_child[active_inv] + point_offset
+        indices[point_is_active] = child_box
 
         trailing_ones = (slice(None),) + (None,)*D
         tree.children[active] = first_child[trailing_ones] + (subscript_offsets*bases).sum(-1)
@@ -65,7 +65,7 @@ def build(scaled, cutoff=5):
 
     return tree, indices
 
-def children(tree, indices, descent):
+def child_boxes(tree, indices, descent):
     subscripts = (descent + 1)/2
     return tree.children[(indices, *subscripts.T)]
 
@@ -77,7 +77,7 @@ def unique_pairs(pairs):
     unique_id = torch.unique(pair_id)
     return torch.stack([unique_id % base, unique_id // base], -1)
 
-def neighbours(tree, indices, directions):
+def neighbour_boxes(tree, indices, directions):
     #TODO: This can be framed as a recursive scheme and then as a dynamic programming scheme. 
     # Should save a factor of log(n)
     indices = torch.as_tensor(indices, dtype=tree.parents.dtype, device=tree.parents.device)
@@ -100,12 +100,12 @@ def neighbours(tree, indices, directions):
 
     for descent, live in zip(neighbour_descents[::-1], alive[::-1]):
         internal = ~tree.terminal[current] & (current >= 0) & live
-        current[internal] = children(tree, current[internal], descent[internal])
+        current[internal] = child_boxes(tree, current[internal], descent[internal])
 
     return current
 
 def u_pairs(tree, ds, ns):
-    """For childless nodes, the neighbouring childless nodes"""
+    """For childless boxes, the neighbouring childless boxes"""
     pairs = torch.stack([tree.id[:, None].expand_as(ns), ns], -1)
     pairs = pairs[(pairs >= 0).all(-1) & tree.terminal[pairs].all(-1)]
 
@@ -116,15 +116,17 @@ def u_pairs(tree, ds, ns):
     return unique_pairs(pairs)
 
 def v_pairs(tree, ds, ns):
-    """Children of the parent's colleagues that are separated from the node"""
+    """Children of the parent's colleagues that are separated from the box"""
     #TODO: Improve the memory consumption of this thing.
+    # Want:
+    # * 
     D = tree.children.ndim-1
     bs = tree.id
     nonzero = (ds != 0).any(-1)
     colleagues = ns[tree.parents[tree.id]][:, nonzero]
 
     friends_descents = chebyshev.flat_cartesian_product(torch.tensor([-1, +1], device=bs.device), D)
-    friends = torch.stack([children(tree, colleagues, d) for d in friends_descents], -1)
+    friends = torch.stack([child_boxes(tree, colleagues, d) for d in friends_descents], -1)
 
     own_descents = tree.descent[bs]
     vector = -own_descents[:, None, None] + 4*ds[None, nonzero, None] + friends_descents[None, None, :]
@@ -136,7 +138,7 @@ def v_pairs(tree, ds, ns):
     return unique_pairs(pairs)
 
 def w_pairs(tree, ds, ns):
-    """For childless nodes, descendents of colleagues whose parents are adjacent but
+    """For childless boxes, descendents of colleagues whose parents are adjacent but
     which aren't themselves"""
     D = tree.children.ndim-1
     bs = tree.terminal.nonzero().squeeze(1)
@@ -168,10 +170,10 @@ def w_pairs(tree, ds, ns):
 
     return unique_pairs(ws)
 
-def pairlists(tree):
+def interaction_lists(tree):
     D = tree.children.ndim-1
     ds = chebyshev.flat_cartesian_product(torch.tensor([-1, 0, +1], device=tree.id.device), D)
-    ns = torch.stack([neighbours(tree, tree.id, d) for d in ds], -1)
+    ns = torch.stack([neighbour_boxes(tree, tree.id, d) for d in ds], -1)
 
     lists = arrdict.arrdict(
                         u=u_pairs(tree, ds, ns),
@@ -189,7 +191,7 @@ def y_pairs(tree, b):
     D = tree.children.ndim-1
     ds = chebyshev.flat_cartesian_product(torch.tensor([-1, 0, +1], device=tree.id.device), D)
 
-    colleagues = torch.cat([neighbours(tree, tree.parents[[b]], d) for d in ds])
+    colleagues = torch.cat([neighbour_boxes(tree, tree.parents[[b]], d) for d in ds])
 
     # A leaf is well-separated from b's parent if it's not a descendent of the colleagues.
     descendents = [colleagues]
@@ -234,7 +236,7 @@ def test_lists(tree, lists):
     # Generate a random problem
     # Get the tree
     # Get the lists
-    # Check that the partners of each node and its ancestors partition the grid
+    # Check that the partners of each box and its ancestors partition the grid
     bs = tree.terminal.nonzero().squeeze()
     for b in bs:
         print(f'Checking {b}')
