@@ -101,10 +101,40 @@ def weights(scaled, cheb, tree, indices):
 
     return W
 
+def linear_coord(coords, max_depth):
+    D = coords.shape[1]
+    dims = torch.arange(D-1, -1, -1, dtype=coords.dtype, device=coords.device)
+    bases = 2**(max_depth*dims)
+    return (coords*bases).sum(-1), bases
+
+def integer_coords(vectors, max_depth):
+    return (2**(max_depth-2)*(vectors + 2)).int()
+
+def float_coords(vectors, max_depth):
+    return vectors.float()/2**(max_depth-2) - 2
+
+def conventional_coords(linear, bases):
+    coords = []
+    for b in bases[:-1]:
+        coords.append(linear // b)
+        linear = linear - b*coords[-1]
+    return torch.stack(coords + [linear], -1)
+
+def unique_vectors(vectors, max_depth):
+    coords = integer_coords(vectors, max_depth)
+    linear, bases = linear_coord(coords, max_depth)
+
+    unique, inv = torch.unique(linear, return_inverse=True)
+    unique = conventional_coords(unique, bases)
+    return float_coords(unique, max_depth), inv
+
 def node_points(scaled, cheb, tree, indices):
     return scaled.scale*(cheb.nodes[None]/2**tree.depths[indices, None, None] + tree.centers[indices, None, :])
 
 def v_interactions(W, scaled, cheb, tree, lists):
+    vectors = tree.centers[lists.v[:, 0]] - tree.centers[lists.v[:, 1]]
+    vectors, inv = unique_vectors(vectors, tree.depths.max())
+
     nodes = node_points(scaled, cheb, tree, lists.v)
     K = KERNEL(nodes[:, 0, :, None], nodes[:, 1, None, :])
     ixns = torch.einsum('ijk,ik->ij', K, W[lists.v[:, 1]]) if len(lists.v) > 0 else W[:0]
@@ -148,9 +178,8 @@ def target_far_field(F, scaled, cheb, tree, indices):
     return torch.einsum('ij,ij->i', S, F[indices.targets]) if len(indices.targets) > 0 else scaled.charges[:0]
 
 def solve(prob):
+    cheb = chebyshev.Chebyshev(4, prob.sources.shape[1], device='cuda')
     scaled = scale(prob)
-    cheb = chebyshev.Chebyshev(4, scaled.sources.shape[1], device='cuda')
-
     tree, indices = orthantree.build(scaled)
     lists = orthantree.pairlists(tree)
 

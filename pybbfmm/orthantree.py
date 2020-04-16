@@ -4,6 +4,7 @@ from aljpy import arrdict
 
 def build(scaled, cutoff=5):
     #TODO: Well this is a travesty of incomprehensibility. Verify it then explain yourself.
+    #TODO: Test the cutoff against sources and targets independently
     D = scaled.sources.shape[1]
 
     points = torch.cat([scaled.sources, scaled.targets])
