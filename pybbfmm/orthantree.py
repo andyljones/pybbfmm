@@ -1,5 +1,5 @@
 import torch
-from . import chebyshev
+from . import sets
 from aljpy import arrdict
 
 def build(scaled, cutoff=5):
@@ -19,8 +19,8 @@ def build(scaled, cutoff=5):
         descent=indices.new_zeros((1, D)))
 
     bases = 2**torch.flip(torch.arange(D, device=indices.device), (0,))
-    subscript_offsets = chebyshev.cartesian_product(torch.tensor([0, 1], device=indices.device), D)
-    center_offsets = chebyshev.cartesian_product(torch.tensor([-1, +1], device=indices.device), D)
+    subscript_offsets = sets.cartesian_product(torch.tensor([0, 1], device=indices.device), D)
+    center_offsets = sets.cartesian_product(torch.tensor([-1, +1], device=indices.device), D)
 
     depth = 0
     while True:
@@ -69,14 +69,6 @@ def child_boxes(tree, indices, descent):
     subscripts = (descent + 1)/2
     return tree.children[(indices, *subscripts.T)]
 
-def unique_pairs(pairs):
-    if len(pairs) == 0:
-        return pairs
-    base = pairs[:, 0].max()+1
-    pair_id = pairs[:, 0] + base*pairs[:, 1]
-    unique_id = torch.unique(pair_id)
-    return torch.stack([unique_id % base, unique_id // base], -1)
-
 def neighbour_boxes(tree, indices, directions):
     #TODO: This can be framed as a recursive scheme and then as a dynamic programming scheme. 
     # Should save a factor of log(n)
@@ -104,81 +96,80 @@ def neighbour_boxes(tree, indices, directions):
 
     return current
 
-def u_pairs(tree, ds, ns):
+def u_pairs(tree, directions, neighbours):
     """For childless boxes, the neighbouring childless boxes"""
-    pairs = torch.stack([tree.id[:, None].expand_as(ns), ns], -1)
+    pairs = torch.stack([tree.id[:, None].expand_as(neighbours), neighbours], -1)
     pairs = pairs[(pairs >= 0).all(-1) & tree.terminal[pairs].all(-1)]
 
     partner_is_larger = tree.depths[pairs[:, 0]] > tree.depths[pairs[:, 1]]
     smaller_partners = torch.flip(pairs[partner_is_larger], (1,))
     pairs = torch.cat([pairs, smaller_partners])
 
-    return unique_pairs(pairs)
+    return sets.unique_pairs(pairs)
 
-def v_pairs(tree, ds, ns):
+def v_pairs(tree, directions, neighbours):
     """Children of the parent's colleagues that are separated from the box"""
     #TODO: Improve the memory consumption of this thing.
     # Want:
     # * 
     D = tree.children.ndim-1
     bs = tree.id
-    nonzero = (ds != 0).any(-1)
-    colleagues = ns[tree.parents[tree.id]][:, nonzero]
+    nonzero = (directions != 0).any(-1)
+    colleagues = neighbours[tree.parents[tree.id]][:, nonzero]
 
-    friends_descents = chebyshev.flat_cartesian_product(torch.tensor([-1, +1], device=bs.device), D)
+    friends_descents = sets.flat_cartesian_product(torch.tensor([-1, +1], device=bs.device), D)
     friends = torch.stack([child_boxes(tree, colleagues, d) for d in friends_descents], -1)
 
     own_descents = tree.descent[bs]
-    vector = -own_descents[:, None, None] + 4*ds[None, nonzero, None] + friends_descents[None, None, :]
+    vector = -own_descents[:, None, None] + 4*directions[None, nonzero, None] + friends_descents[None, None, :]
     friends[(vector.abs() <= 2).all(-1)] = -1
 
     pairs = torch.stack([bs[:, None, None].expand_as(friends), friends], -1)
     pairs = pairs[friends != -1]
 
-    return unique_pairs(pairs)
+    return sets.unique_pairs(pairs)
 
-def w_pairs(tree, ds, ns):
+def w_pairs(tree, directions, neighbours):
     """For childless boxes, descendents of colleagues whose parents are adjacent but
     which aren't themselves"""
     D = tree.children.ndim-1
     bs = tree.terminal.nonzero().squeeze(1)
-    ds = chebyshev.flat_cartesian_product(torch.tensor([-1, 0, +1], device=bs.device), D)
 
-    origins, colleagues, directions = [], [], []
-    for d, dns in zip(ds, ns.T):
+    origins, colleagues, dirs = [], [], []
+    for d, dns in zip(directions, neighbours.T):
         dns = dns[bs]
         is_colleague = (tree.depths[bs] == tree.depths[dns])
         valid = is_colleague & ~tree.terminal[dns]
         origins.append(bs[valid])
         colleagues.append(dns[valid])
-        directions.append(d[None].repeat_interleave(valid.sum(), 0))
-    origins, colleagues, directions = torch.cat(origins), torch.cat(colleagues), torch.cat(directions, 0)
+        dirs.append(d[None].repeat_interleave(valid.sum(), 0))
+    origins, colleagues, dirs = torch.cat(origins), torch.cat(colleagues), torch.cat(dirs, 0)
 
     ws = [origins.new_empty((0, 2))]
     parents = colleagues
     while parents.nelement():
         friends = tree.children[parents].reshape(-1, 2**D)
-        distant = (tree.descent[friends] == directions[:, None, :]).any(-1)
+        distant = (tree.descent[friends] == dirs[:, None, :]).any(-1)
         
         pairs = torch.stack([origins[:, None].expand_as(friends), friends], -1)
         ws.append(pairs[distant])
         
         mask = ~distant & ~tree.terminal[friends]
         origins, parents = pairs[mask].T
-        directions = directions[:, None].repeat_interleave(2**D, 1)[mask]
+        dirs = dirs[:, None].repeat_interleave(2**D, 1)[mask]
     ws = torch.cat(ws)
 
-    return unique_pairs(ws)
+    return sets.unique_pairs(ws)
 
 def interaction_lists(tree):
     D = tree.children.ndim-1
-    ds = chebyshev.flat_cartesian_product(torch.tensor([-1, 0, +1], device=tree.id.device), D)
-    ns = torch.stack([neighbour_boxes(tree, tree.id, d) for d in ds], -1)
+    directions = sets.flat_cartesian_product(torch.tensor([-1, 0, +1], device=tree.id.device), D)
+    neighbours = torch.stack([neighbour_boxes(tree, tree.id, d) for d in directions], -1)
 
     lists = arrdict.arrdict(
-                        u=u_pairs(tree, ds, ns),
-                        v=v_pairs(tree, ds, ns),
-                        w=w_pairs(tree, ds, ns))
+                        u=u_pairs(tree, directions, neighbours),
+                        v=v_pairs(tree, directions, neighbours),
+                        w=w_pairs(tree, directions, neighbours))
     lists['x'] = torch.flip(lists['w'], (1,))
     return lists
 
@@ -189,7 +180,7 @@ def y_pairs(tree, b):
     
     This isn't used in production, it's just for debugging. It should equal the compliment of the other lists"""
     D = tree.children.ndim-1
-    ds = chebyshev.flat_cartesian_product(torch.tensor([-1, 0, +1], device=tree.id.device), D)
+    ds = sets.flat_cartesian_product(torch.tensor([-1, 0, +1], device=tree.id.device), D)
 
     colleagues = torch.cat([neighbour_boxes(tree, tree.parents[[b]], d) for d in ds])
 

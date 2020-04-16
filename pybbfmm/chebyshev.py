@@ -1,13 +1,7 @@
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
-
-def cartesian_product(xs, D):
-    xs = torch.as_tensor(xs)
-    return torch.stack(torch.meshgrid(*((xs,)*D)), -1)
-
-def flat_cartesian_product(xs, D):
-    return cartesian_product(xs, D).reshape(-1, D)
+from . import sets
 
 class Chebyshev:
     
@@ -22,7 +16,7 @@ class Chebyshev:
         if self._nodes is None:
             ms = torch.arange(self.N, device=self.device)
             onedim = torch.cos((ms+1/2)*np.pi/self.N)
-            self._nodes = flat_cartesian_product(onedim, self.D)
+            self._nodes = sets.flat_cartesian_product(onedim, self.D)
         return self._nodes
 
     def similarity(self, a, b):
