@@ -21,24 +21,12 @@ def scale(prob):
         charges=prob.charges,
         targets=(prob.targets - mid)/scale)
 
-def uplift_coeffs(cheb):
-    shifts = torch.tensor([-.5, +.5], device=cheb.device)
-    shifts = sets.cartesian_product(shifts, cheb.D)
-    children = shifts[..., None, :] + cheb.nodes/2
-    return cheb.similarity(cheb.nodes, children)
-
-def pushdown_coeffs(cheb):
-    shifts = torch.tensor([-.5, +.5], device=cheb.device)
-    shifts = sets.cartesian_product(shifts, cheb.D)
-    children = shifts[..., None, :] + cheb.nodes/2
-    return cheb.similarity(children, cheb.nodes)
-
 def weights(scaled, cheb, tree, indices):
     loc = 2**tree.depths[indices.sources, None]*(scaled.sources - tree.centers[indices.sources])
     S = cheb.similarity(loc, cheb.nodes)
     W = sets.accumulate(indices.sources, S*scaled.charges[:, None], len(tree.id))
 
-    coeffs = uplift_coeffs(cheb)
+    coeffs = cheb.upwards_coeffs()
     dot_dims = (list(range(1, cheb.D+2)), list(range(1, cheb.D+2)))
 
     parents = tree.parents[indices.sources]
@@ -108,7 +96,7 @@ def u_interactions(scaled, indices, lists):
 
 def far_field(W, v, x, cheb, tree):
     F = torch.zeros_like(W)
-    coeffs = pushdown_coeffs(cheb)
+    coeffs = cheb.downwards_coeffs()
     dot_dims = ((1,), (-1,))
 
     parents = tree.parents.new_tensor([0])
@@ -128,16 +116,19 @@ def target_far_field(F, scaled, cheb, tree, indices):
 def solve(prob):
     cheb = chebyshev.Chebyshev(4, prob.sources.shape[1], device='cuda')
     scaled = scale(prob)
-    tree, indices = orthantree.build(scaled)
+    tree, indices = orthantree.orthantree(scaled)
     lists = orthantree.interaction_lists(tree)
 
     W = weights(scaled, cheb, tree, indices)
+
     v = v_interactions(W, scaled, cheb, tree, lists)
     x = x_interactions(scaled, cheb, tree, indices, lists)
-    w = w_interactions(W, scaled, cheb, tree, indices, lists)
-    u = u_interactions(scaled, indices, lists)
+
     F = far_field(W, v, x, cheb, tree)
     f = target_far_field(F, scaled, cheb, tree, indices)
+
+    w = w_interactions(W, scaled, cheb, tree, indices, lists)
+    u = u_interactions(scaled, indices, lists)
 
     return f + w + u
 

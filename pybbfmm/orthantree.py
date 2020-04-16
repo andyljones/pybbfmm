@@ -2,7 +2,7 @@ import torch
 from . import sets
 from aljpy import arrdict
 
-def build(scaled, cutoff=5):
+def orthantree(scaled, capacity=5):
     #TODO: Well this is a travesty of incomprehensibility. Verify it then explain yourself.
     #TODO: Test the cutoff against sources and targets independently
     D = scaled.sources.shape[1]
@@ -25,7 +25,7 @@ def build(scaled, cutoff=5):
     depth = 0
     while True:
         used, used_inv, counts = torch.unique(indices, return_inverse=True, return_counts=True)
-        tree.terminal[used] = (counts <= cutoff)
+        tree.terminal[used] = (counts <= capacity)
         
         used_is_active = ~tree.terminal[used]
         point_is_active = used_is_active[used_inv]

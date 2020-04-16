@@ -47,6 +47,18 @@ class Chebyshev:
     def anterpolate(self, x, v):
         return (self.similarity(self.nodes, x)*v).sum(-1)
 
+    def upwards_coeffs(self):
+        shifts = torch.tensor([-.5, +.5], device=self.device)
+        shifts = sets.cartesian_product(shifts, self.D)
+        children = shifts[..., None, :] + self.nodes/2
+        return self.similarity(self.nodes, children)
+
+    def downwards_coeffs(self):
+        shifts = torch.tensor([-.5, +.5], device=self.device)
+        shifts = sets.cartesian_product(shifts, self.D)
+        children = shifts[..., None, :] + self.nodes/2
+        return self.similarity(children, self.nodes)
+
 def test_similarity():
 
     cheb = Chebyshev(4, 1)
