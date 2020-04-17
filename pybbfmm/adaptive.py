@@ -67,8 +67,7 @@ def w_interactions(W, scaled, cheb, tree, indices, scheme):
     return sets.accumulate(pairs[:, 0], ixns, len(indices.targets))
 
 def u_interactions(scaled, indices, scheme):
-    pairs = sets.inner_join(scheme.lists.u, sets.right_index(indices.sources))
-    pairs = sets.inner_join(sets.left_index(indices.targets), pairs)
+    pairs = scheme.u_point_pairs
     K = KERNEL(scaled.scale*scaled.targets[pairs[:, 0]], scaled.scale*scaled.sources[pairs[:, 1]])
     return sets.accumulate(pairs[:, 0], K*scaled.charges[pairs[:, 1]], len(scaled.targets))
 
@@ -95,7 +94,7 @@ def solve(prob):
     cheb = chebyshev.Chebyshev(4, prob.sources.shape[1], device='cuda')
     scaled = scale(prob)
     tree, indices = orthantree.orthantree(scaled)
-    scheme = orthantree.interaction_scheme(tree)
+    scheme = orthantree.interaction_scheme(tree, indices)
 
     W = weights(scaled, cheb, tree, indices)
 

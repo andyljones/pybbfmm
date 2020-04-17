@@ -119,6 +119,12 @@ def u_pairs(tree, directions, neighbours):
     pairs = torch.cat([pairs, smaller_partners])
     return pairs
 
+def u_point_pairs(tree, directions, neighbours, indices):
+    u = u_pairs(tree, directions, neighbours)
+    pairs = sets.inner_join(u, sets.right_index(indices.sources))
+    pairs = sets.inner_join(sets.left_index(indices.targets), pairs)
+    return pairs
+
 def v_pairs(tree, directions, neighbours):
     """Children of the parent's colleagues that are separated from the box"""
     D = tree.children.ndim-1
@@ -190,18 +196,19 @@ def w_pairs(tree, directions, neighbours):
     pairs, _ = sets.unique_rows(pairs)
     return pairs
 
-def interaction_scheme(tree):
+def interaction_scheme(tree, indices):
     D = tree.children.ndim-1
     directions = sets.flat_cartesian_product(torch.tensor([-1, 0, +1], device=tree.id.device), D)
     neighbours = torch.stack([neighbour_boxes(tree, tree.id, d) for d in directions], -1)
 
-    u = u_pairs(tree, directions, neighbours)
+    u = u_point_pairs(tree, directions, neighbours, indices)
     v, v_vectors = v_pairs(tree, directions, neighbours)
     w = w_pairs(tree, directions, neighbours)
     x = w.flip((1,))
 
     return arrdict.arrdict(
-        lists=arrdict.arrdict(v=v, u=u, w=w, x=x), 
+        lists=arrdict.arrdict(v=v, w=w, x=x), 
+        u_point_pairs=u,
         v_vectors=v_vectors)
 
 ## TEST
