@@ -54,15 +54,18 @@ def v_interactions(W, scaled, cheb, tree, scheme):
         ixns.index_add_(0, vs[:, 0], W[vs[:, 1]] @ k)
     return ixns
 
-def x_interactions(scaled, cheb, tree, indices, scheme):
-    pairs = sets.inner_join(scheme.lists.x, sets.right_index(indices.sources))
-    K = KERNEL(node_locations(scaled, cheb, tree, pairs[:, 0]), scaled.scale*scaled.sources[pairs[:, 1], None, :])
-    ixns = K*scaled.charges[pairs[:, 1], None]
-    return sets.accumulate(pairs[:, 0], ixns, len(tree.id))
+def x_interactions(scaled, cheb, tree, indices, scheme, chunksize=int(1e6)):
+    ixns = scaled.charges.new_zeros((len(tree.id), cheb.N**cheb.D))
+    chunks = (scheme.lists.x[i:i+chunksize] for i in range(0, len(scheme.lists.x), chunksize))
+    for chunk in chunks:
+        pairs = sets.inner_join(chunk, sets.right_index(indices.sources))
+        K = KERNEL(node_locations(scaled, cheb, tree, pairs[:, 0]), scaled.scale*scaled.sources[pairs[:, 1], None, :])
+        ixns.index_add_(0, pairs[:, 0], K*scaled.charges[pairs[:, 1], None])
+    return ixns
 
 def w_interactions(W, scaled, cheb, tree, indices, scheme, chunksize=int(1e6)):
     ixns = scaled.charges.new_zeros(len(scaled.targets))
-    chunks = (scheme.lists.w[i:i+chunksize] for i in range(0, len(scheme.lists.u), chunksize))
+    chunks = (scheme.lists.w[i:i+chunksize] for i in range(0, len(scheme.lists.w), chunksize))
     for chunk in chunks:
         pairs = sets.inner_join(sets.left_index(indices.targets), chunk)
         K = KERNEL(scaled.scale*scaled.targets[pairs[:, 0], None, :], node_locations(scaled, cheb, tree, pairs[:, 1]))
