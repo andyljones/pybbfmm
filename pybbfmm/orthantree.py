@@ -2,9 +2,20 @@ import torch
 from . import sets
 from aljpy import arrdict
 
+def underoccupied(source_idxs, target_idxs, terminal, capacity):
+    source_unique, source_counts = torch.unique(source_idxs, return_counts=True)
+    target_unique, target_counts = torch.unique(target_idxs, return_counts=True)
+
+    source_okay = torch.ones_like(terminal)
+    source_okay[source_unique] = (source_counts <= capacity)
+    target_okay = torch.ones_like(terminal)
+    target_okay[target_unique] = (target_counts <= capacity)
+
+    return source_okay & target_okay
+
+
 def orthantree(scaled, capacity=5):
     #TODO: Well this is a travesty of incomprehensibility. Verify it then explain yourself.
-    #TODO: Test the cutoff against sources and targets independently
     D = scaled.sources.shape[1]
 
     points = torch.cat([scaled.sources, scaled.targets])
@@ -24,8 +35,9 @@ def orthantree(scaled, capacity=5):
 
     depth = 0
     while True:
-        used, used_inv, counts = torch.unique(indices, return_inverse=True, return_counts=True)
-        tree.terminal[used] = (counts <= capacity)
+        used, used_inv = torch.unique(indices, return_inverse=True)
+        source_idxs, target_idxs = indices[:len(scaled.sources)], indices[-len(scaled.targets):]
+        tree.terminal[used] = underoccupied(source_idxs, target_idxs, tree.terminal, capacity)[used] 
         
         used_is_active = ~tree.terminal[used]
         point_is_active = used_is_active[used_inv]
