@@ -21,10 +21,20 @@ def scale(prob):
         charges=prob.charges,
         targets=(prob.targets - mid)/scale)
 
+def terminal_weights(scaled, cheb, tree, indices, chunksize=int(1e6)):
+    W = scaled.charges.new_zeros((len(tree.id), cheb.N**cheb.D))
+    for i in range(0, len(indices.sources), chunksize):
+        idx_chunk = indices.sources[i:i+chunksize]
+        src_chunk = scaled.sources[i:i+chunksize]
+        chg_chunk = scaled.charges[i:i+chunksize]
+
+        loc = 2**tree.depths[idx_chunk, None]*(src_chunk - tree.centers[idx_chunk])
+        S = cheb.similarity(loc, cheb.nodes)
+        W.index_add_(0, idx_chunk, S*chg_chunk[:, None])
+    return W
+
 def weights(scaled, cheb, tree, indices):
-    loc = 2**tree.depths[indices.sources, None]*(scaled.sources - tree.centers[indices.sources])
-    S = cheb.similarity(loc, cheb.nodes)
-    W = sets.accumulate(indices.sources, S*scaled.charges[:, None], len(tree.id))
+    W = terminal_weights(scaled, cheb, tree, indices)
 
     coeffs = cheb.upwards_coeffs()
     dot_dims = (list(range(1, cheb.D+2)), list(range(1, cheb.D+2)))
@@ -97,13 +107,14 @@ def far_field(W, v, x, cheb, tree):
     return F
 
 def target_far_field(F, scaled, cheb, tree, indices, chunksize=int(1e6)):
-    potentials = scaled.charges.new_zeros(len(scaled.targets))
-    chunks = (indices.targets[i:i+chunksize] for i in range(0, len(indices.targets), chunksize))
-    for chunk in chunks:
-        loc = 2**tree.depths[chunk, None]*(scaled.targets - tree.centers[chunk])
+    f = scaled.charges.new_zeros(len(scaled.targets))
+    for i in range(0, len(indices.targets), chunksize):
+        idx_chunk = indices.targets[i:i+chunksize]
+        tgt_chunk = scaled.targets[i:i+chunksize]
+        loc = 2**tree.depths[idx_chunk, None]*(tgt_chunk - tree.centers[idx_chunk])
         S = cheb.similarity(loc, cheb.nodes)
-        potentials[chunk] = (S*F[chunk]).sum(-1)
-    return potentials
+        f[idx_chunk] = (S*F[idx_chunk]).sum(-1)
+    return f
 
 def solve(prob):
     cheb = chebyshev.Chebyshev(4, prob.sources.shape[1], device='cuda')
