@@ -96,10 +96,14 @@ def far_field(W, v, x, cheb, tree):
     
     return F
 
-def target_far_field(F, scaled, cheb, tree, indices):
-    loc = 2**tree.depths[indices.targets, None]*(scaled.targets - tree.centers[indices.targets])
-    S = cheb.similarity(loc, cheb.nodes)
-    return torch.einsum('ij,ij->i', S, F[indices.targets]) if len(indices.targets) > 0 else scaled.charges[:0]
+def target_far_field(F, scaled, cheb, tree, indices, chunksize=int(1e6)):
+    potentials = scaled.charges.new_zeros(len(scaled.targets))
+    chunks = (indices.targets[i:i+chunksize] for i in range(0, len(indices.targets), chunksize))
+    for chunk in chunks:
+        loc = 2**tree.depths[chunk, None]*(scaled.targets - tree.centers[chunk])
+        S = cheb.similarity(loc, cheb.nodes)
+        potentials[chunk] = (S*F[chunk]).sum(-1)
+    return potentials
 
 def solve(prob):
     cheb = chebyshev.Chebyshev(4, prob.sources.shape[1], device='cuda')
