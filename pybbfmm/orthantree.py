@@ -14,7 +14,7 @@ def underoccupied(source_idxs, target_idxs, terminal, capacity):
     return source_okay & target_okay
 
 
-def orthantree(scaled, capacity=5):
+def orthantree(scaled, capacity=8):
     #TODO: Well this is a travesty of incomprehensibility. Verify it then explain yourself.
     D = scaled.sources.shape[1]
 
