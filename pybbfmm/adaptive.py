@@ -66,11 +66,15 @@ def w_interactions(W, scaled, cheb, tree, indices, scheme):
     ixns = torch.einsum('ij,ij->i', K, W[pairs[:, 1]]) if len(pairs) > 0 else scaled.charges[:0]
     return sets.accumulate(pairs[:, 0], ixns, len(indices.targets))
 
-def u_interactions(scaled, indices, scheme):
-    pairs = sets.inner_join(scheme.lists.u, sets.right_index(indices.sources))
-    pairs = sets.inner_join(sets.left_index(indices.targets), pairs)
-    K = KERNEL(scaled.scale*scaled.targets[pairs[:, 0]], scaled.scale*scaled.sources[pairs[:, 1]])
-    return sets.accumulate(pairs[:, 0], K*scaled.charges[pairs[:, 1]], len(scaled.targets))
+def u_interactions(scaled, indices, scheme, chunksize=int(1e6)):
+    ixns = scaled.charges.new_zeros(len(scaled.targets))
+    chunks = (scheme.lists.u[i:i+chunksize] for i in range(0, len(scheme.lists.u), chunksize))
+    for chunk in chunks:
+        pairs = sets.inner_join(chunk, sets.right_index(indices.sources))
+        pairs = sets.inner_join(sets.left_index(indices.targets), pairs)
+        K = KERNEL(scaled.scale*scaled.targets[pairs[:, 0]], scaled.scale*scaled.sources[pairs[:, 1]])
+        ixns.index_add_(0, pairs[:, 0], K*scaled.charges[pairs[:, 1]])
+    return ixns
 
 def far_field(W, v, x, cheb, tree):
     F = torch.zeros_like(W)
