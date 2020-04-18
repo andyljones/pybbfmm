@@ -208,13 +208,12 @@ def interaction_scheme(tree):
     directions = sets.flat_cartesian_product(torch.tensor([-1, 0, +1], device=tree.id.device), D)
     neighbours = torch.stack([neighbour_boxes(tree, tree.id, d) for d in directions], -1)
 
-    u = u_pairs(tree, neighbours)
     v, v_vectors = v_pairs(tree, directions, neighbours)
     w = w_pairs(tree, directions, neighbours)
     x = w.flip((1,))
 
     return arrdict.arrdict(
-        lists=arrdict.arrdict(v=v, u=u, w=w, x=x), 
+        lists=arrdict.arrdict(v=v, w=w, x=x), 
         u_ragged=u_ragged(tree, neighbours),
         v_vectors=v_vectors)
 

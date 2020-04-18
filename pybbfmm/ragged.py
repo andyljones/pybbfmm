@@ -20,6 +20,14 @@ class Ragged:
         self._starts = cardinalities.cumsum(0) - cardinalities
         self.max_cardinality = cardinalities.max()
 
+    @property
+    def q_len(self):
+        return len(self._cardinalities)
+
+    @property
+    def p_len(self):
+        return len(self._image)
+
     def __getitem__(self, idx):
         qs, c = idx
         qs = torch.as_tensor(qs)

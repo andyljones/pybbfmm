@@ -72,7 +72,7 @@ def w_interactions(W, scaled, cheb, tree, indices, scheme, chunksize=int(1e6)):
         ixns.index_add_(0, pairs[:, 0], (K*W[pairs[:, 1]]).sum(-1))
     return ixns
 
-def u_interactions(scaled, indices, scheme, chunksize=int(1e6)):
+def u_interactions_old(scaled, indices, scheme, chunksize=int(1e6)):
     ixns = scaled.charges.new_zeros(len(scaled.targets))
     chunks = (scheme.lists.u[i:i+chunksize] for i in range(0, len(scheme.lists.u), chunksize))
     for chunk in chunks:
@@ -82,15 +82,16 @@ def u_interactions(scaled, indices, scheme, chunksize=int(1e6)):
         ixns.index_add_(0, pairs[:, 0], K*scaled.charges[pairs[:, 1]])
     return ixns
 
-def u_interactions_new(scaled, indices, scheme):
-    box_to_source = ragged.from_indices(indices.sources, len(scheme.u_ragged._cardinalities))
+def u_interactions(scaled, indices, scheme):
+    box_to_source = ragged.from_indices(indices.sources, scheme.u_ragged.p_len)
+    target_idxs = torch.arange(len(scaled.targets), device=scaled.targets.device)
     ixns = scaled.charges.new_zeros(len(scaled.targets))
     for b in range(scheme.u_ragged.max_cardinality):
         boxes, target_mask = scheme.u_ragged[indices.targets, b]
         for s in range(box_to_source.max_cardinality):
             sources, box_mask = box_to_source[boxes, s]
-            targets = indices.targets[target_mask][box_mask]
-            K = KERNEL(scaled.scale*scaled.targets[targets], scaled.scale*scaled.sources[sources])
+            targets = target_idxs[target_mask][box_mask]
+            K = KERNEL(scaled.scale*scaled.targets[target_mask][box_mask], scaled.scale*scaled.sources[sources])
             ixns.index_add_(0, targets, K*scaled.charges[sources])
     return ixns
         
