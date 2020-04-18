@@ -112,6 +112,7 @@ def u_pairs(tree, neighbours):
     """For childless boxes, the neighbouring childless boxes"""
     pairs = torch.stack([tree.id[:, None].expand_as(neighbours), neighbours], -1)
     pairs = pairs[(pairs >= 0).all(-1) & tree.terminal[pairs].all(-1)]
+    pairs, _ = sets.unique_rows(pairs)
 
     partner_is_larger = tree.depths[pairs[:, 0]] > tree.depths[pairs[:, 1]]
     smaller_partners = torch.flip(pairs[partner_is_larger], (1,))
