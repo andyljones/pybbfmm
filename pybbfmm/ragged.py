@@ -33,7 +33,18 @@ class Ragged:
     def __str__(self):
         return repr(self)
 
-def invert(qs, n_qs):
+def from_pairs(pairs, n_ps, n_qs):
+    ps, qs = pairs.T
+    sort = torch.sort(qs)
+    image = ps[sort.indices]
+    unique, counts = torch.unique_consecutive(sort.values, return_counts=True)
+
+    cardinalities = qs.new_zeros(n_qs)
+    cardinalities[unique] = counts 
+
+    return Ragged(image, cardinalities)
+
+def from_indices(qs, n_qs):
     sort = torch.sort(qs)
     unique, counts = torch.unique_consecutive(sort.values, return_counts=True)
     cardinalities = qs.new_zeros(n_qs)
@@ -42,7 +53,7 @@ def invert(qs, n_qs):
 
 def test_invert():
     qs = torch.tensor([5, 3, 3, 2, 0])
-    ps = invert(qs, max(qs)+1)
+    ps = from_indices(qs, max(qs)+1)
 
     im, ma = ps[qs, 0]
 

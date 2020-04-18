@@ -108,11 +108,10 @@ def neighbour_boxes(tree, indices, directions):
 
     return current
 
-def u_pairs(tree, directions, neighbours):
+def u_pairs(tree, neighbours):
     """For childless boxes, the neighbouring childless boxes"""
     pairs = torch.stack([tree.id[:, None].expand_as(neighbours), neighbours], -1)
     pairs = pairs[(pairs >= 0).all(-1) & tree.terminal[pairs].all(-1)]
-    pairs, _ = sets.unique_rows(pairs)
 
     partner_is_larger = tree.depths[pairs[:, 0]] > tree.depths[pairs[:, 1]]
     smaller_partners = torch.flip(pairs[partner_is_larger], (1,))
@@ -123,10 +122,14 @@ def u_ragged(tree, neighbours):
     unique_neighbours = torch.sort(neighbours, 1, descending=True).values
     unique_neighbours[:, 1:][unique_neighbours[:, 1:] == unique_neighbours[:, :-1]] = -1
 
-    image = unique_neighbours[unique_neighbours != -1]
-    cardinalities = (unique_neighbours != -1).sum(1)
+    pairs = torch.stack([tree.id[:, None].expand_as(neighbours), unique_neighbours], -1)
+    pairs = pairs[(pairs >= 0).all(-1) & tree.terminal[pairs].all(-1)]
 
-    return ragged.Ragged(image, cardinalities)
+    partner_is_larger = tree.depths[pairs[:, 0]] > tree.depths[pairs[:, 1]]
+    smaller_partners = torch.flip(pairs[partner_is_larger], (1,))
+    pairs = torch.cat([pairs, smaller_partners])
+
+    return ragged.from_pairs(pairs, len(tree.id), len(tree.id))
 
 def v_pairs(tree, directions, neighbours):
     """Children of the parent's colleagues that are separated from the box"""
@@ -204,13 +207,14 @@ def interaction_scheme(tree):
     directions = sets.flat_cartesian_product(torch.tensor([-1, 0, +1], device=tree.id.device), D)
     neighbours = torch.stack([neighbour_boxes(tree, tree.id, d) for d in directions], -1)
 
-    u = u_pairs(tree, directions, neighbours)
+    u = u_pairs(tree, neighbours)
     v, v_vectors = v_pairs(tree, directions, neighbours)
     w = w_pairs(tree, directions, neighbours)
     x = w.flip((1,))
 
     return arrdict.arrdict(
         lists=arrdict.arrdict(v=v, u=u, w=w, x=x), 
+        u_ragged=u_ragged(tree, neighbours),
         v_vectors=v_vectors)
 
 ## TEST
