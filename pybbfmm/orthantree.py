@@ -1,5 +1,5 @@
 import torch
-from . import sets
+from . import sets, ragged
 from aljpy import arrdict
 
 def underoccupied(source_idxs, target_idxs, terminal, capacity):
@@ -118,6 +118,15 @@ def u_pairs(tree, directions, neighbours):
     smaller_partners = torch.flip(pairs[partner_is_larger], (1,))
     pairs = torch.cat([pairs, smaller_partners])
     return pairs
+
+def u_ragged(tree, neighbours):
+    unique_neighbours = torch.sort(neighbours, 1, descending=True).values
+    unique_neighbours[:, 1:][unique_neighbours[:, 1:] == unique_neighbours[:, :-1]] = -1
+
+    image = unique_neighbours[unique_neighbours != -1]
+    cardinalities = (unique_neighbours != -1).sum(1)
+
+    return ragged.Ragged(image, cardinalities)
 
 def v_pairs(tree, directions, neighbours):
     """Children of the parent's colleagues that are separated from the box"""

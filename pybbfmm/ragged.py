@@ -18,9 +18,11 @@ class Ragged:
         self._image = image
         self._cardinalities = cardinalities
         self._starts = cardinalities.cumsum(0) - cardinalities
+        self.max_cardinality = cardinalities.max()
 
     def __getitem__(self, idx):
         qs, c = idx
+        qs = torch.as_tensor(qs)
         valid = self._cardinalities[qs] > c
         indices = self._starts[qs[valid]] + c
         return self._image[indices], valid
@@ -37,7 +39,6 @@ def invert(qs, n_qs):
     cardinalities = qs.new_zeros(n_qs)
     cardinalities[unique] = counts 
     return Ragged(sort.indices, cardinalities)
-
 
 def test_invert():
     qs = torch.tensor([5, 3, 3, 2, 0])

@@ -1,6 +1,6 @@
 import aljpy
 from aljpy import arrdict
-from . import test, chebyshev, orthantree, sets
+from . import test, chebyshev, orthantree, sets, ragged
 import torch
 
 KERNEL = test.quad_kernel
