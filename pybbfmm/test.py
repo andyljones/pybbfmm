@@ -12,6 +12,19 @@ def random_problem(S=3, T=5, D=2):
         charges=np.random.uniform(.1, 1., (S,)),
         targets=np.random.uniform(-1., +1., (T, D))).map(torch.tensor).float().cuda()
 
+def v_w_problem():
+    return arrdict.arrdict(
+        sources=torch.tensor([
+            [-.25, +.75],
+            [-.75, +.75]]),
+        charges=torch.tensor([1., 1.]),
+        targets=torch.tensor([
+            [+.25, +.75],
+            [+.75, +.75]]),
+        scale=torch.tensor([1., 1.])
+    ).cuda()
+
+
 def solve(prob, kernel=quad_kernel):
     k = kernel(prob.targets[:, None], prob.sources[None, :])
     return (k*prob.charges).sum(-1)

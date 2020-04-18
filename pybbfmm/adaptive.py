@@ -46,8 +46,8 @@ def v_interactions(W, scaled, cheb, tree, scheme):
     offsets = sets.flat_cartesian_product(torch.arange(-3, +4, device=device), cheb.D)
     offsets = offsets[(offsets.abs() > 1).any(-1)]
     scales = scaled.scale/2**depths[:, None, None, None, None]
-    boxes = scales*cheb.nodes[None, None, :, None, :]/2
-    partners = scales*(2*offsets[None, :, None, None, :] + cheb.nodes[None, None, None, :, :]/2)
+    boxes = scales*cheb.nodes[None, None, None, :, :]
+    partners = scales*(2*offsets[None, :, None, None, :] + cheb.nodes[None, None, :, None, :])
     K = KERNEL(boxes, partners) 
 
     ixns = torch.zeros_like(W) 
