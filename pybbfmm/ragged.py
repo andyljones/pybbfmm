@@ -14,22 +14,35 @@ import torch
 
 class Ragged:
 
-    def __init__(self, image, cards):
+    def __init__(self, image, cardinalities):
         self._image = image
-        self._cards = cards
-        self._starts = cards.cumsum(0)
+        self._cardinalities = cardinalities
+        self._starts = cardinalities.cumsum(0) - cardinalities
 
-    def __getitem__(self, ps, c):
-        valid = self._cards[ps] > c
-        indices = self._starts[ps[valid]] + c
+    def __getitem__(self, idx):
+        qs, c = idx
+        valid = self._cardinalities[qs] > c
+        indices = self._starts[qs[valid]] + c
         return self._image[indices], valid
 
-def invert(p_to_q, length):
-    pass
+    def __repr__(self):
+        return f'{type(self).__name__}({len(self._starts)}, {len(self._image)})'
+
+    def __str__(self):
+        return repr(self)
+
+def invert(qs, n_qs):
+    sort = torch.sort(qs)
+    unique, counts = torch.unique_consecutive(sort.values, return_counts=True)
+    cardinalities = qs.new_zeros(n_qs)
+    cardinalities[unique] = counts 
+    return Ragged(sort.indices, cardinalities)
 
 
 def test_invert():
-    ps = torch.tensor([5, 3, 3, 2, 0])
-    qs = invert(ps)
+    qs = torch.tensor([5, 3, 3, 2, 0])
+    ps = invert(qs, max(qs)+1)
 
-    im, ma = qs[ps, 0]
+    im, ma = ps[qs, 0]
+
+    torch.testing.assert_allclose(qs, qs[im])
