@@ -148,7 +148,7 @@ def v_scheme(tree, directions, neighbours):
 
         own_descents = tree.descent[bs]
         offsets = (-own_descents[:, None] + 4*directions[i] + friends_descents[None, :])/2
-        friends[(offsets.abs() <= 2).all(-1)] = -1
+        friends[(offsets.abs() <= 1).all(-1)] = -1
 
         pairs = torch.stack([bs[:, None].expand_as(friends), friends], -1)
         pairs = pairs[friends != -1]
