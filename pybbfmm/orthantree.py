@@ -108,17 +108,6 @@ def neighbour_boxes(tree, indices, directions):
 
     return current
 
-def u_pairs(tree, neighbours):
-    """For childless boxes, the neighbouring childless boxes"""
-    pairs = torch.stack([tree.id[:, None].expand_as(neighbours), neighbours], -1)
-    pairs = pairs[(pairs >= 0).all(-1) & tree.terminal[pairs].all(-1)]
-    pairs, _ = sets.unique_rows(pairs)
-
-    partner_is_larger = tree.depths[pairs[:, 0]] > tree.depths[pairs[:, 1]]
-    smaller_partners = torch.flip(pairs[partner_is_larger], (1,))
-    pairs = torch.cat([pairs, smaller_partners])
-    return pairs
-
 def u_scheme(tree, neighbours):
     unique_neighbours = torch.sort(neighbours, 1, descending=True).values
     unique_neighbours[:, 1:][unique_neighbours[:, 1:] == unique_neighbours[:, :-1]] = -1
