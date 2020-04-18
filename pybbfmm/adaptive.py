@@ -82,6 +82,18 @@ def u_interactions(scaled, indices, scheme, chunksize=int(1e6)):
         ixns.index_add_(0, pairs[:, 0], K*scaled.charges[pairs[:, 1]])
     return ixns
 
+def u_interactions_new(scaled, indices, scheme):
+    box_to_source = ragged.from_indices(indices.sources, len(scheme.u_ragged._cardinalities))
+    ixns = scaled.charges.new_zeros(len(scaled.targets))
+    for b in range(scheme.u_ragged.max_cardinality):
+        boxes, target_mask = scheme.u_ragged[indices.targets, b]
+        for s in range(box_to_source.max_cardinality):
+            sources, box_mask = box_to_source[boxes, s]
+            targets = indices.targets[target_mask][box_mask]
+            K = KERNEL(scaled.scale*scaled.targets[targets], scaled.scale*scaled.sources[sources])
+            ixns.index_add_(0, targets, K*scaled.charges[sources])
+    return ixns
+        
 def far_field(W, v, x, cheb, tree):
     F = torch.zeros_like(W)
     coeffs = cheb.downwards_coeffs()
