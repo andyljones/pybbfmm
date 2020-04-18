@@ -41,17 +41,20 @@ def node_locations(scaled, cheb, tree, indices):
     return scaled.scale*(cheb.nodes[None]/2**tree.depths[indices, None, None] + tree.centers[indices, None, :])
 
 def v_interactions(W, scaled, cheb, tree, scheme):
-    offsets = scheme.v_vectors.offsets[:, None, None]
-    scales = scaled.scale/2**scheme.v_vectors.depths[:, None, None, None]
-    boxes = scales*cheb.nodes[None, None, :]
-    partners = scales*(offsets + cheb.nodes[None, :, None])
+    device = scheme.v.pairs.device
+    depths = torch.arange(tree.depths.max()+1, device=device)
+    offsets = sets.flat_cartesian_product(torch.arange(-3, +4, device=device), cheb.D)
+    scales = scaled.scale**depths[:, None, None, None, None]
+    boxes = scales*cheb.nodes[None, None, :, None, :]/2
+    partners = scales*(offsets[None, :, None, None, :] + cheb.nodes[None, None, None, :, :]/2)
     K = KERNEL(boxes, partners) 
 
     ixns = torch.zeros_like(W) 
-    for i, k in enumerate(K):
-        mask = (scheme.v_vectors.inverse == i)
-        vs = scheme.lists.v[mask]
-        ixns.index_add_(0, vs[:, 0], W[vs[:, 1]] @ k)
+    for i, d in enumerate(depths):
+        for j, o in enumerate(offsets):
+            mask = (scheme.v.offsets == o).all(-1) & (scheme.v.depths == d)
+            vs = scheme.v.pairs[mask]
+            ixns.index_add_(0, vs[:, 0], W[vs[:, 1]] @ K[i, j])
     return ixns
 
 def x_interactions(scaled, cheb, tree, indices, scheme, chunksize=int(1e6)):
@@ -72,22 +75,12 @@ def w_interactions(W, scaled, cheb, tree, indices, scheme, chunksize=int(1e6)):
         ixns.index_add_(0, pairs[:, 0], (K*W[pairs[:, 1]]).sum(-1))
     return ixns
 
-def u_interactions_old(scaled, indices, scheme, chunksize=int(1e6)):
-    ixns = scaled.charges.new_zeros(len(scaled.targets))
-    chunks = (scheme.lists.u[i:i+chunksize] for i in range(0, len(scheme.lists.u), chunksize))
-    for chunk in chunks:
-        pairs = sets.inner_join(chunk, sets.right_index(indices.sources))
-        pairs = sets.inner_join(sets.left_index(indices.targets), pairs)
-        K = KERNEL(scaled.scale*scaled.targets[pairs[:, 0]], scaled.scale*scaled.sources[pairs[:, 1]])
-        ixns.index_add_(0, pairs[:, 0], K*scaled.charges[pairs[:, 1]])
-    return ixns
-
 def u_interactions(scaled, indices, scheme):
-    box_to_source = ragged.from_indices(indices.sources, scheme.u_ragged.p_len)
+    box_to_source = ragged.from_indices(indices.sources, scheme.u.p_len)
     target_idxs = torch.arange(len(scaled.targets), device=scaled.targets.device)
     ixns = scaled.charges.new_zeros(len(scaled.targets))
-    for b in range(scheme.u_ragged.max_cardinality):
-        boxes, target_mask = scheme.u_ragged[indices.targets, b]
+    for b in range(scheme.u.max_cardinality):
+        boxes, target_mask = scheme.u[indices.targets, b]
         for s in range(box_to_source.max_cardinality):
             sources, box_mask = box_to_source[boxes, s]
             targets = target_idxs[target_mask][box_mask]
