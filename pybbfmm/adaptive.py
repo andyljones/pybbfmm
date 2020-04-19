@@ -27,9 +27,14 @@ def scale(prob):
         targets=(prob.targets - mid)/scale)
 
 def weights(scaled, cheb, tree, indices):
-    loc = 2**tree.depths[indices.sources, None]*(scaled.sources - tree.centers[indices.sources])
-    S = cheb.similarity(loc, cheb.nodes)
-    W = sets.accumulate(indices.sources, S*scaled.charges[:, None], len(tree.id))
+    leaves = tree.terminal.nonzero()
+    box_to_source = ragged.invert_indices(indices.sources, len(tree.id))
+    W = scaled.charges.new_zeros((len(tree.id), cheb.N**cheb.D))
+    for k in range(box_to_source.max_k):
+        sources, mask = box_to_source.kth(leaves, k)
+        boxes = leaves[mask]
+        loc = 2**tree.depths[boxes, None]*(scaled.sources[sources] - tree.centers[boxes])
+        W[boxes] += cheb.similarity(loc, cheb.nodes)*scaled.charges[sources, None]
 
     coeffs = cheb.upwards_coeffs()
     dot_dims = (list(range(1, cheb.D+2)), list(range(1, cheb.D+2)))
