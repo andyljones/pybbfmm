@@ -143,13 +143,13 @@ def v_scheme(tree, depths, directions, neighbours):
         for friend_descent in descents:
             friends = child_boxes(tree, colleagues, friend_descent)
             for own_descent in descents:
-                offset = (own_descent + 4*directions[d] + friend_descent)/2
-                if (offset <= 1).all(-1):
+                offset = (-own_descent + 4*directions[d] + friend_descent)/2
+                if (offset.abs() <= 1).all(-1):
                     continue
 
-                for depth in range(depths.domain):
+                for depth in torch.arange(depths.domain, device=tree.id.device):
                     s = depths.slice(depth)
-                    mask = (tree.descent[s] == own_descent).all(-1) & ~tree.terminal[colleagues[s]]
+                    mask = (tree.descent[s] == own_descent).all(-1) & ~tree.terminal[colleagues[s]] & (colleagues[s] >= 0)
                     result.append(arrdict.arrdict(
                         boxes=tree.id[s][mask],
                         friends=friends[s][mask],

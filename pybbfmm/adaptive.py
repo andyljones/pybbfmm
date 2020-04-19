@@ -47,7 +47,6 @@ def v_interactions(W, scaled, cheb, tree, scheme):
         boxes = scale*cheb.nodes
         friends = scale*(2*v.offset + cheb.nodes)
         k = KERNEL(boxes[None, :], friends[:, None])
-        print(scale)
         ixns.index_add_(0, v.boxes, W[v.friends] @ k)
     
     return ixns
