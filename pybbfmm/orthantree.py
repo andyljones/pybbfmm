@@ -94,7 +94,7 @@ def neighbour_boxes(tree, indices, directions):
     # Should save a factor of log(n)
     indices = torch.as_tensor(indices, dtype=tree.parents.dtype, device=tree.parents.device)
     directions = torch.as_tensor(directions, dtype=tree.parents.dtype, device=tree.parents.device)
-    directions = directions[None].repeat_interleave(len(indices), 0) if directions.ndim == 1 else directions
+    directions = directions[None].repeat((len(indices), 1))
     assert len(directions) == len(indices), 'There should be as many directions as indices'
 
     current = indices.clone()
