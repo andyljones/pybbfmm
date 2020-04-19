@@ -34,15 +34,22 @@ def weights(scaled, cheb, tree, indices):
         sources, mask = box_to_source.kth(leaves, k)
         boxes = leaves[mask]
         loc = 2**tree.depths[boxes, None]*(scaled.sources[sources] - tree.centers[boxes])
-        W[boxes] += cheb.similarity(loc, cheb.nodes)*scaled.charges[sources, None]
+        # This is the most memory-intensive stage anywhere; we go column by column to avoid
+        # building a (n_nodes, N**D) array.
+        for n in range(W.shape[1]):
+            W[:, n][boxes] += cheb.similarity(loc, cheb.nodes[n])*scaled.charges[sources]
 
     coeffs = cheb.upwards_coeffs()
-    dot_dims = (list(range(1, cheb.D+2)), list(range(1, cheb.D+2)))
+    offsets = sets.flat_cartesian_product(torch.tensor([0, 1], device=coeffs.device), cheb.D)
+    dot_dims = (list(range(1, cheb.D+2)), list(range(cheb.D+1)))
 
     parents = tree.parents[indices.sources]
     while (parents >= 0).any():
         parents = parents[parents >= 0]
-        W[parents] = torch.tensordot(W[tree.children[parents]], coeffs, dot_dims)
+        for o in offsets:
+            children = tree.children[(parents, *o)]
+            for n in range(W.shape[1]):
+                W[:, n][parents] += W[children] @ coeffs[(n, *o)].T
         parents = tree.parents[parents] 
 
     return W
