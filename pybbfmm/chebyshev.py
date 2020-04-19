@@ -37,7 +37,7 @@ class Chebyshev:
         theta_a = torch.acos(a).reshape(da)
         theta_b = torch.acos(b).reshape(db)
 
-        ks = torch.arange(1, self.N, device=a.device)
+        ks = torch.arange(1, self.N, device=a.device)[None, None, None, :]
         terms = torch.cos(ks*theta_a)*torch.cos(ks*theta_b)
         return (1/self.N + 2/self.N*terms.sum(-1)).prod(-1)
 
