@@ -57,7 +57,7 @@ def v_interactions(W, scaled, cheb, tree, scheme):
         boxes = scale*cheb.nodes
         friends = scale*(2*v.offset + cheb.nodes)
         k = KERNEL(boxes[None, :], friends[:, None])
-        ixns.index_add_(0, v.boxes, W[v.friends] @ k)
+        ixns[v.boxes] += W[v.friends] @ k
     
     return ixns
 
@@ -71,7 +71,7 @@ def x_interactions(scaled, cheb, tree, indices, scheme):
             sources, partner_mask = box_to_source.kth(partner, s) 
             boxes = tree.id[box_mask][partner_mask]
             K = KERNEL(node_locations(scaled, cheb, tree, boxes), scaled.scale*scaled.sources[sources, None, :])
-            ixns.index_add_(0, boxes, K*scaled.charges[sources, None])
+            ixns[boxes] += K*scaled.charges[sources, None]
     
     return ixns
 
@@ -82,7 +82,7 @@ def w_interactions(W, scaled, cheb, tree, indices, scheme):
         targets = scaled.scale*scaled.targets[box_mask, None, :]
         partner_nodes = node_locations(scaled, cheb, tree, partner)
         K = KERNEL(targets, partner_nodes)
-        ixns.index_add_(0, box_mask.nonzero().squeeze(1), (K*W[partner]).sum(-1))
+        ixns[box_mask.nonzero().squeeze(1)] += (K*W[partner]).sum(-1)
     return ixns
 
 def u_interactions(scaled, indices, scheme):
@@ -95,7 +95,7 @@ def u_interactions(scaled, indices, scheme):
             sources, box_mask = box_to_source.kth(boxes, s)
             targets = target_idxs[target_mask][box_mask]
             K = KERNEL(scaled.scale*scaled.targets[target_mask][box_mask], scaled.scale*scaled.sources[sources])
-            ixns.index_add_(0, targets, K*scaled.charges[sources])
+            ixns[targets] += K*scaled.charges[sources]
     return ixns
         
 def far_field(W, v, x, cheb, tree):
@@ -139,7 +139,8 @@ def solve(prob):
     w = w_interactions(W, scaled, cheb, tree, indices, scheme)
     u = u_interactions(scaled, indices, scheme)
 
-    return f + w + u
+    potential = f + w + u
+    return potential
 
 def run():
     prob = test.random_problem(S=100, T=100)
