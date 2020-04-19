@@ -51,14 +51,20 @@ def v_interactions(W, scaled, cheb, tree, scheme):
     
     return ixns
 
-def x_interactions(scaled, cheb, tree, indices, scheme, chunksize=int(1e6)):
+def x_interactions(scaled, cheb, tree, indices, scheme):
+    box_to_source = ragged.invert_indices(indices.sources, len(tree.id))
+
     ixns = scaled.charges.new_zeros((len(tree.id), cheb.N**cheb.D))
-    chunks = (scheme.lists.x[i:i+chunksize] for i in range(0, len(scheme.lists.x), chunksize))
-    for chunk in chunks:
-        pairs = sets.inner_join(chunk, sets.right_index(indices.sources))
-        K = KERNEL(node_locations(scaled, cheb, tree, pairs[:, 0]), scaled.scale*scaled.sources[pairs[:, 1], None, :])
-        ixns.index_add_(0, pairs[:, 0], K*scaled.charges[pairs[:, 1], None])
+    for p in range(scheme.x.max_k):
+        partner, box_mask = scheme.x.kth(tree.id, p)
+        for s in range(box_to_source.max_k):
+            sources, partner_mask = box_to_source.kth(partner, s) 
+            boxes = tree.id[box_mask][partner_mask]
+            K = KERNEL(node_locations(scaled, cheb, tree, boxes), scaled.scale*scaled.sources[sources, None, :])
+            ixns.index_add_(0, boxes, K*scaled.charges[sources, None])
+    
     return ixns
+
 
 def w_interactions(W, scaled, cheb, tree, indices, scheme, chunksize=int(1e6)):
     ixns = scaled.charges.new_zeros(len(scaled.targets))
@@ -70,12 +76,12 @@ def w_interactions(W, scaled, cheb, tree, indices, scheme, chunksize=int(1e6)):
     return ixns
 
 def u_interactions(scaled, indices, scheme):
-    box_to_source = ragged.from_indices(indices.sources, scheme.u.range)
+    box_to_source = ragged.invert_indices(indices.sources, scheme.u.range)
     target_idxs = torch.arange(len(scaled.targets), device=scaled.targets.device)
     ixns = scaled.charges.new_zeros(len(scaled.targets))
-    for b in range(scheme.u.max_cardinality):
+    for b in range(scheme.u.max_k):
         boxes, target_mask = scheme.u.kth(indices.targets, b)
-        for s in range(box_to_source.max_cardinality):
+        for s in range(box_to_source.max_k):
             sources, box_mask = box_to_source.kth(boxes, s)
             targets = target_idxs[target_mask][box_mask]
             K = KERNEL(scaled.scale*scaled.targets[target_mask][box_mask], scaled.scale*scaled.sources[sources])

@@ -18,7 +18,7 @@ class Ragged:
         self._image = image
         self._cardinalities = cardinalities
         self._starts = cardinalities.cumsum(0) - cardinalities
-        self.max_cardinality = cardinalities.max()
+        self.max_k = cardinalities.max()
 
     @property
     def domain(self):
@@ -37,6 +37,9 @@ class Ragged:
     def slice(self, idx):
         return slice(self._starts[idx], self._starts[idx]+self._cardinalities[idx])
 
+    def image(self, idx):
+        return self._image[self.slice(idx)]
+
     def __repr__(self):
         return f'{type(self).__name__}({len(self._starts)}, {len(self._image)})'
 
@@ -44,7 +47,7 @@ class Ragged:
         return repr(self)
 
 def from_pairs(pairs, n_ps, n_qs):
-    ps, qs = pairs.T
+    qs, ps = pairs.T
     sort = torch.sort(qs)
     image = ps[sort.indices]
     unique, counts = torch.unique_consecutive(sort.values, return_counts=True)
@@ -54,7 +57,7 @@ def from_pairs(pairs, n_ps, n_qs):
 
     return Ragged(image, cardinalities)
 
-def from_indices(qs, n_qs):
+def invert_indices(qs, n_qs):
     sort = torch.sort(qs)
     unique, counts = torch.unique_consecutive(sort.values, return_counts=True)
     cardinalities = qs.new_zeros(n_qs)
@@ -63,7 +66,7 @@ def from_indices(qs, n_qs):
 
 def test_invert():
     qs = torch.tensor([5, 3, 3, 2, 0])
-    ps = from_indices(qs, max(qs)+1)
+    ps = invert_indices(qs, max(qs)+1)
 
     im, ma = ps.kth(qs, 0)
 

@@ -188,7 +188,6 @@ def w_pairs(tree, directions, neighbours):
         dirs = dirs[:, None].repeat_interleave(2**D, 1)[mask]
     pairs = torch.cat(pairs)
 
-    pairs, _ = sets.unique_rows(pairs)
     return pairs
 
 def interaction_scheme(tree, depths):
@@ -197,10 +196,11 @@ def interaction_scheme(tree, depths):
     neighbours = torch.stack([neighbour_boxes(tree, tree.id, d) for d in directions], -1)
 
     w = w_pairs(tree, directions, neighbours)
-    x = w.flip((1,))
 
     return arrdict.arrdict(
-        lists=arrdict.arrdict(w=w, x=x), 
+        lists=arrdict.arrdict(w=w, x=w.flip((1,))),
+        w=ragged.from_pairs(w, len(tree.id), len(tree.id)),
+        x=ragged.from_pairs(w.flip((1,)), len(tree.id), len(tree.id)),
         u=u_scheme(tree, neighbours),
         v=v_scheme(tree, depths, directions, neighbours))
 
