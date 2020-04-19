@@ -21,19 +21,21 @@ class Ragged:
         self.max_cardinality = cardinalities.max()
 
     @property
-    def q_len(self):
+    def domain(self):
         return len(self._cardinalities)
 
     @property
-    def p_len(self):
+    def range(self):
         return len(self._image)
 
-    def __getitem__(self, idx):
-        qs, c = idx
+    def kth(self, qs, c):
         qs = torch.as_tensor(qs)
         valid = self._cardinalities[qs] > c
         indices = self._starts[qs[valid]] + c
         return self._image[indices], valid
+
+    def slice(self, idx):
+        return slice(self._starts[idx], self._starts[idx]+self._cardinalities[idx])
 
     def __repr__(self):
         return f'{type(self).__name__}({len(self._starts)}, {len(self._image)})'
@@ -63,6 +65,6 @@ def test_invert():
     qs = torch.tensor([5, 3, 3, 2, 0])
     ps = from_indices(qs, max(qs)+1)
 
-    im, ma = ps[qs, 0]
+    im, ma = ps.kth(qs, 0)
 
     torch.testing.assert_allclose(qs, qs[im])

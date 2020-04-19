@@ -33,6 +33,8 @@ def orthantree(scaled, capacity=8):
     subscript_offsets = sets.cartesian_product(torch.tensor([0, 1], device=indices.device), D)
     center_offsets = sets.cartesian_product(torch.tensor([-1, +1], device=indices.device), D)
 
+    depthcounts = []
+
     depth = 0
     while True:
         used, used_inv = torch.unique(indices, return_inverse=True)
@@ -69,13 +71,19 @@ def orthantree(scaled, capacity=8):
             children=tree.children.new_full((n_children,) + (2,)*D, -1))
         tree = arrdict.cat([tree, children])
 
+        depthcounts.append(n_children)
+
     tree['id'] = torch.arange(len(tree.parents), device=points.device)
 
     indices = arrdict.arrdict(
         sources=indices[:len(scaled.sources)],
         targets=indices[-len(scaled.targets):])
 
-    return tree, indices
+    depths = ragged.Ragged(
+        torch.arange(len(tree.id), device=points.device),
+        torch.as_tensor(depthcounts, device=points.device))
+
+    return tree, indices, depths
 
 def child_boxes(tree, indices, descent):
     subscripts = (descent + 1)/2
@@ -121,34 +129,34 @@ def u_scheme(tree, neighbours):
 
     return ragged.from_pairs(pairs, len(tree.id), len(tree.id))
 
-def v_scheme(tree, directions, neighbours):
+def v_scheme(tree, depths, directions, neighbours):
     """Children of the parent's colleagues that are separated from the box"""
     D = tree.children.ndim-1
-    bs = tree.id
     nonzero_directions = (directions != 0).any(-1)
-    friends_descents = sets.flat_cartesian_product(torch.tensor([-1, +1], device=bs.device), D)
+    descents = sets.flat_cartesian_product(torch.tensor([-1, +1], device=tree.id.device), D)
 
-    # The v list is many times bigger than the other lists, so we'll go one direction at a time
-    # to preserve memory.
+    # The v list is many times bigger than the other lists, so we'll loop rather than 
+    # vectorize to preserve memory.
     result = []
-    for i in nonzero_directions.nonzero().squeeze(1):
-        colleagues = neighbours[tree.parents[tree.id], i]
-        friends = torch.stack([child_boxes(tree, colleagues, d) for d in friends_descents], -1)
+    for d in nonzero_directions.nonzero().squeeze(1):
+        colleagues = neighbours[tree.parents, d]
+        for friend_descent in descents:
+            friends = child_boxes(tree, colleagues, friend_descent)
+            for own_descent in descents:
+                offset = (own_descent + 4*directions[d] + friend_descent)/2
+                if (offset <= 1).all(-1):
+                    continue
 
-        own_descents = tree.descent[bs]
-        offsets = (-own_descents[:, None] + 4*directions[i] + friends_descents[None, :])/2
-        friends[(offsets.abs() <= 1).all(-1)] = -1
+                for depth in range(depths.domain):
+                    s = depths.slice(depth)
+                    mask = (tree.descent[s] == own_descent).all(-1) & ~tree.terminal[colleagues[s]]
+                    result.append(arrdict.arrdict(
+                        boxes=tree.id[s][mask],
+                        friends=friends[s][mask],
+                        offset=offset,
+                        depth=d)) 
 
-        pairs = torch.stack([bs[:, None].expand_as(friends), friends], -1)
-        pairs = pairs[friends != -1]
-        result.append(arrdict.arrdict(
-            pairs=pairs, 
-            offsets=offsets[friends != -1],
-            depths=tree.depths[pairs[:, 0]])) 
-
-    # No need to assure uniqueness; if a parent's colleague has a child, then it'll necessarily only turn up in
-    # the neighbours list once.
-    return arrdict.cat(result)
+    return result
 
 def w_pairs(tree, directions, neighbours):
     """For childless boxes, descendents of colleagues whose parents are adjacent but
@@ -183,7 +191,7 @@ def w_pairs(tree, directions, neighbours):
     pairs, _ = sets.unique_rows(pairs)
     return pairs
 
-def interaction_scheme(tree):
+def interaction_scheme(tree, depths):
     D = tree.children.ndim-1
     directions = sets.flat_cartesian_product(torch.tensor([-1, 0, +1], device=tree.id.device), D)
     neighbours = torch.stack([neighbour_boxes(tree, tree.id, d) for d in directions], -1)
@@ -194,7 +202,7 @@ def interaction_scheme(tree):
     return arrdict.arrdict(
         lists=arrdict.arrdict(w=w, x=x), 
         u=u_scheme(tree, neighbours),
-        v=v_scheme(tree, directions, neighbours))
+        v=v_scheme(tree, depths, directions, neighbours))
 
 ## TEST
 

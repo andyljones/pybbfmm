@@ -41,21 +41,15 @@ def node_locations(scaled, cheb, tree, indices):
     return scaled.scale*(cheb.nodes[None]/2**tree.depths[indices, None, None] + tree.centers[indices, None, :])
 
 def v_interactions(W, scaled, cheb, tree, scheme):
-    device = scheme.v.pairs.device
-    depths = torch.arange(tree.depths.max()+1, device=device)
-    offsets = sets.flat_cartesian_product(torch.arange(-3, +4, device=device), cheb.D)
-    offsets = offsets[(offsets.abs() > 1).any(-1)]
-    scales = scaled.scale/2**depths[:, None, None, None, None]
-    boxes = scales*cheb.nodes[None, None, None, :, :]
-    partners = scales*(2*offsets[None, :, None, None, :] + cheb.nodes[None, None, :, None, :])
-    K = KERNEL(boxes, partners) 
-
     ixns = torch.zeros_like(W) 
-    for i, d in enumerate(depths):
-        for j, o in enumerate(offsets):
-            mask = (scheme.v.offsets == o).all(-1) & (scheme.v.depths == d)
-            vs = scheme.v.pairs[mask]
-            ixns.index_add_(0, vs[:, 0], W[vs[:, 1]] @ K[i, j])
+    for v in scheme.v:
+        scale = scaled.scale/2**v.depth
+        boxes = scale*cheb.nodes
+        friends = scale*(2*v.offset + cheb.nodes)
+        k = KERNEL(boxes[None, :], friends[:, None])
+        print(scale)
+        ixns.index_add_(0, v.boxes, W[v.friends] @ k)
+    
     return ixns
 
 def x_interactions(scaled, cheb, tree, indices, scheme, chunksize=int(1e6)):
@@ -77,13 +71,13 @@ def w_interactions(W, scaled, cheb, tree, indices, scheme, chunksize=int(1e6)):
     return ixns
 
 def u_interactions(scaled, indices, scheme):
-    box_to_source = ragged.from_indices(indices.sources, scheme.u.p_len)
+    box_to_source = ragged.from_indices(indices.sources, scheme.u.range)
     target_idxs = torch.arange(len(scaled.targets), device=scaled.targets.device)
     ixns = scaled.charges.new_zeros(len(scaled.targets))
     for b in range(scheme.u.max_cardinality):
-        boxes, target_mask = scheme.u[indices.targets, b]
+        boxes, target_mask = scheme.u.kth(indices.targets, b)
         for s in range(box_to_source.max_cardinality):
-            sources, box_mask = box_to_source[boxes, s]
+            sources, box_mask = box_to_source.kth(boxes, s)
             targets = target_idxs[target_mask][box_mask]
             K = KERNEL(scaled.scale*scaled.targets[target_mask][box_mask], scaled.scale*scaled.sources[sources])
             ixns.index_add_(0, targets, K*scaled.charges[sources])
@@ -116,8 +110,8 @@ def target_far_field(F, scaled, cheb, tree, indices, chunksize=int(1e6)):
 def solve(prob):
     cheb = chebyshev.Chebyshev(4, prob.sources.shape[1], device='cuda')
     scaled = scale(prob)
-    tree, indices = orthantree.orthantree(scaled)
-    scheme = orthantree.interaction_scheme(tree)
+    tree, indices, depths = orthantree.orthantree(scaled)
+    scheme = orthantree.interaction_scheme(tree, depths)
 
     W = weights(scaled, cheb, tree, indices)
 
@@ -137,3 +131,13 @@ def run():
     soln = solve(prob)
     ref = test.solve(prob)
     (soln - ref).pow(2).sum()/ref.pow(2).sum()
+
+def mem_benchmark():
+    from pytorch_memlab import LineProfiler 
+    n = int(8e6)
+    prob = test.random_problem(S=n, T=n)
+
+    with LineProfiler(solve) as prof:
+        solve(prob)
+    
+    prof.print_stats()
