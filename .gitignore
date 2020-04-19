@@ -3,3 +3,5 @@ __pycache__
 *.ipynb
 .ipynb_checkpoints
 .git
+credentials.yml
+.cache
