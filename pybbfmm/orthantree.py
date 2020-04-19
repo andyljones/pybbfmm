@@ -33,7 +33,7 @@ def orthantree(scaled, capacity=8):
     subscript_offsets = sets.cartesian_product(torch.tensor([0, 1], device=indices.device), D)
     center_offsets = sets.cartesian_product(torch.tensor([-1, +1], device=indices.device), D)
 
-    depthcounts = []
+    depthcounts = [torch.as_tensor([1], device=indices.device)]
 
     depth = 0
     while True:
@@ -154,7 +154,7 @@ def v_scheme(tree, depths, directions, neighbours):
                         boxes=tree.id[s][mask],
                         friends=friends[s][mask],
                         offset=offset,
-                        depth=d)) 
+                        depth=depth)) 
 
     return result
 
