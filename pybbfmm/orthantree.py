@@ -198,7 +198,6 @@ def interaction_scheme(tree, depths):
     w = w_pairs(tree, directions, neighbours)
 
     return arrdict.arrdict(
-        lists=arrdict.arrdict(w=w, x=w.flip((1,))),
         w=ragged.from_pairs(w, len(tree.id), len(tree.id)),
         x=ragged.from_pairs(w.flip((1,)), len(tree.id), len(tree.id)),
         u=u_scheme(tree, neighbours),

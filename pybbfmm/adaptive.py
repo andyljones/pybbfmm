@@ -65,14 +65,14 @@ def x_interactions(scaled, cheb, tree, indices, scheme):
     
     return ixns
 
-
-def w_interactions(W, scaled, cheb, tree, indices, scheme, chunksize=int(1e6)):
+def w_interactions(W, scaled, cheb, tree, indices, scheme):
     ixns = scaled.charges.new_zeros(len(scaled.targets))
-    chunks = (scheme.lists.w[i:i+chunksize] for i in range(0, len(scheme.lists.w), chunksize))
-    for chunk in chunks:
-        pairs = sets.inner_join(sets.left_index(indices.targets), chunk)
-        K = KERNEL(scaled.scale*scaled.targets[pairs[:, 0], None, :], node_locations(scaled, cheb, tree, pairs[:, 1]))
-        ixns.index_add_(0, pairs[:, 0], (K*W[pairs[:, 1]]).sum(-1))
+    for p in range(scheme.w.max_k):
+        partner, box_mask = scheme.w.kth(indices.targets, p)
+        targets = scaled.scale*scaled.targets[box_mask, None, :]
+        partner_nodes = node_locations(scaled, cheb, tree, partner)
+        K = KERNEL(targets, partner_nodes)
+        ixns.index_add_(0, box_mask.nonzero().squeeze(1), (K*W[partner]).sum(-1))
     return ixns
 
 def u_interactions(scaled, indices, scheme):
