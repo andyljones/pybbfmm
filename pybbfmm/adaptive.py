@@ -8,7 +8,12 @@ EPS = 1e-2
 
 def limits(prob):
     points = torch.cat([prob.sources, prob.targets])
-    return torch.stack([points.min(0).values - EPS, points.max(0).values + EPS])
+    lims = []
+    # This madness is because max(dim=0) is 2000x slower than max()
+    # https://github.com/pytorch/pytorch/issues/36900
+    for d in range(points.shape[1]):
+        lims.append(torch.stack([points[:, d].min() - EPS, points[:, d].max() + EPS]))
+    return torch.stack(lims, -1)
 
 def scale(prob):
     lims = limits(prob)
