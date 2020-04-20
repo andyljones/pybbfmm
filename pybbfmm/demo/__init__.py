@@ -1,4 +1,9 @@
-
+import torch
+from aljpy import arrdict
+import numpy as np
+from tqdm.auto import tqdm
+from .. import presolve, evaluate
+from . import population
 
 def risk_kernel(a, b):
     d = (a - b).pow(2).sum(-1).pow(.5)
@@ -20,11 +25,11 @@ def nbody_problem(pop):
 
 def simulate(n=10e3):
     # Get a population
-    pop = pop_points(n=n)
+    pop = population.points(n=n)
 
     # Phrase it as an n-body problem and do the pre-solve.
     prob = nbody_problem(pop)
-    presoln = adaptive.presolve(prob)
+    presoln = presolve(prob)
 
     # Set patient zero
     presoln.scaled.charges[0] = 1.
@@ -33,7 +38,7 @@ def simulate(n=10e3):
     for t in tqdm(range(120)):
         infected.append(presoln.scaled.charges.cpu().numpy())
 
-        log_nonrisk = adaptive.evaluate(**presoln)
+        log_nonrisk = evaluate(**presoln)
         risk = 1 - torch.exp(log_nonrisk)
         
         rands = torch.rand_like(risk)
@@ -41,3 +46,6 @@ def simulate(n=10e3):
     
     return infected, prob.targets.cpu().numpy()
 
+def run():
+    infected, points = simulate()
+    plotting.animate(infects, points)
