@@ -1,6 +1,5 @@
 import torch
 import numpy as np
-import matplotlib.pyplot as plt
 from . import sets
 
 class Chebyshev:
@@ -60,6 +59,7 @@ class Chebyshev:
         return self.similarity(children, self.nodes)
 
 def test_similarity():
+    import matplotlib.pyplot as plt
 
     cheb = Chebyshev(4, 1)
 
