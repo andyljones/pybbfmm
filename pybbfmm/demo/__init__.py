@@ -25,7 +25,10 @@ def adapt(risk):
 
     return log_nonrisk
 
-def simulate(n=10e6, T=120, device='cuda'):
+def simulate(n=10e3, T=40, device='cuda'):
+    print(f'This demo will be for {n} agents and {T} timesteps on device "{device}".')
+    print('The default values are fairly small, so as not to frustrate anyone with out-of-memory errors. Pass larger ones if you want.')
+
     # Get a population
     pop = population.points(n=n)
 
@@ -66,6 +69,7 @@ def save(infected, points):
     import pickle
 
     pkl = pickle.dumps({'points': points, 'infected': infected})
+    pathlib.Path('output').mkdir(exist_ok=True, parents=True)
     pathlib.Path('output/tmp.pkl').write_bytes(pkl)
 
 def load():
