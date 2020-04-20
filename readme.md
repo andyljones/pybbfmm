@@ -12,6 +12,16 @@ This demonstrates the acceleration of a community transmission kernel. It simula
 
 [You can find the code here](pybbfmm/demo/__init__.py).
 
+## Installation
+For just the solver,
+```
+pip install --upgrade git+https://github.com/andyljones/pybbfmm
+```
+For the solver and the demo code,
+```
+pip install --upgrade git+https://github.com/andyljones/pybbfmm#egg=pybbfmm[demo]
+```
+
 ## Notes
 * This represents a few weeks worth of work. There is a lot of performance still to wring out of the system. I think memory efficiency could probably be upped 2x-4x, and time efficiency 10x with a month or so of effort.
 * The main limitation for large problems is memory. With accuracy turned all the way down to `N=1` Chebyshev node per box, about 22m sources & targets can be fit on the 10GB of a RTX 2080 GPU.

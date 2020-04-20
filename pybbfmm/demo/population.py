@@ -1,14 +1,26 @@
 import requests
 import zipfile
 import aljpy
+import gzip
 import yaml
 import numpy as np
+from pkg_resources import resource_exists, resource_filename
+import pickle
 from io import BytesIO
 
 LOGIN = 'https://data-package.ceh.ac.uk/sso/login'
 DATA = 'https://data-package.ceh.ac.uk/data/0995e94d-6d42-40c1-8ed4-5090d82471e1.zip'
 
 def credentials():
+    # You shouldn't hit this since the result has been folded into the repo.
+    # But if you do, go create an account on ceh.ac.uk and then add your
+    # details to a file `credentials.yml` in your working directory, with
+    # this content:
+    # ```
+    # CEH:
+    #    username: yourusername@gmail.com
+    #    password: youractualpassword
+    # ```
     return yaml.safe_load(open('credentials.yml', 'r'))['CEH']
 
 @aljpy.autocache()
@@ -22,6 +34,11 @@ def _density_map():
 
 def density_map():
     """Fetches a 1km-resolution map of the UK's population density as a numpy array."""
+
+    # This is a hack to allow the demo to be run without CEH credentials
+    if resource_exists(__package__, 'density_map.gz'):
+        return np.loadtxt(resource_filename(__package__, 'density_map.gz'))
+
     content = _density_map()
     with zipfile.ZipFile(BytesIO(content)) as zf:
         filename = '0995e94d-6d42-40c1-8ed4-5090d82471e1/data/UK_residential_population_2011_1_km.asc'

@@ -7,6 +7,7 @@ setup(name='pybbfmm',
       author_email='andyjones.ed@gmail.com',
       url='https://github.com/andyljones/pybbfmm',
       packages=find_packages(),
+      package_data={"": ['density_map.gz']},
       python_requires='>=3.6',
       install_requires=[
           'torch>=1.4', 'aljpy>=0.4', 'numpy>=1.18'],
