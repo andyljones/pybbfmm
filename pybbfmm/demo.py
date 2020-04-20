@@ -7,6 +7,7 @@ from io import BytesIO
 import torch
 from aljpy import arrdict 
 from . import adaptive
+from tqdm.auto import tqdm
 
 LOGIN = 'https://data-package.ceh.ac.uk/sso/login'
 DATA = 'https://data-package.ceh.ac.uk/data/0995e94d-6d42-40c1-8ed4-5090d82471e1.zip'
@@ -40,18 +41,11 @@ def pop_points(n=1e3):
     density = density/np.nansum(density)
     density[np.isnan(density)] = 0.
 
-    # Pick a grid cell for each person in proportion to the density
-    valid = (density > 0)
-    coords = np.stack(valid.nonzero(), -1)
-    ds = density[valid]
-
-    occupancy = np.round(int(n)*ds).astype(int).clip(1, None)
-    indices = np.zeros(occupancy.sum()+1, dtype=int)
-    indices[occupancy.cumsum() - occupancy] = 1
-    indices = indices.cumsum() - 1
+    indices = np.random.choice(np.arange(density.size), (int(n),), p=density.flatten())
+    subscripts = np.stack(np.unravel_index(indices, density.shape), -1)
 
     # Pick a uniformly random spot in the grid cell
-    ij = coords[indices, :] + np.random.rand(len(indices), 2)
+    ij = subscripts + np.random.rand(len(subscripts), 2)
     xy = np.stack([ij[:, 1], len(density) - ij[:, 0]], -1)
 
     return xy
@@ -60,19 +54,28 @@ def kernel(a, b):
     d = (a - b).pow(2).sum(-1).pow(.5)
     return 1/(1 + (d/4)**3)
 
-def random_problem(*args, p=10, **kwargs):
-    points = pop_points(*args, **kwargs)
-    charges = np.zeros(len(points))
-    charges[np.random.choice(np.arange(len(points)), p)] = 1.
+def nbody_problem(pop):
     prob = arrdict.arrdict(
-        sources=points,
-        targets=points,
-        charges=charges
+        sources=pop,
+        targets=pop,
+        charges=np.zeros(len(pop))
     ).map(torch.as_tensor).float().cuda()
     prob['kernel'] = kernel
     return prob
 
-def run():
-    prob = random_problem(n=10e6)
+def render():
+    pass
+
+def run(n=10e3):
+    pop = pop_points(n=n)
+    prob = nbody_problem(pop)
     presoln = adaptive.presolve(prob)
-    soln = adaptive.evaluate(**presoln)
+
+    # Set patient zero
+    presoln.scaled.charges[0] = 1.
+
+    for t in tqdm(range(10)):
+        risk = adaptive.evaluate(**presoln)
+        
+        rands = torch.rand_like(risk)
+        presoln.scaled.charges = (rands < risk).float()
