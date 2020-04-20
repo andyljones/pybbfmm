@@ -1,8 +1,11 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from aljpy import recording
+from aljpy.plot import si_suffix
 import scipy.ndimage
 import scipy.interpolate
+import pathlib
+from IPython.display import display, HTML
 
 def viewport(charges, points, threshold=1e-1, eps=10):
     threshold = threshold*charges.max()
@@ -31,7 +34,7 @@ def plot(charges, center, scale, step, points, threshold=1e-1, res=1000):
 
     fig, ax = plt.subplots()
     ax.set_aspect(1)
-    ax.set_title(f'#{step}: {(charges > threshold).sum():2g} infected')
+    ax.set_title(f'#{step}: {si_suffix((charges > threshold).sum())} infected')
     ax.set_xticks([])
     ax.set_yticks([])
 
@@ -56,14 +59,15 @@ def plot(charges, center, scale, step, points, threshold=1e-1, res=1000):
     return fig
 
 def animate(infected, points, smoothing=4):
+    print('Smoothing viewports...')
     centers, scales = interpolated_viewports(infected, points, smoothing)
     steps = (np.arange(len(centers))/smoothing).astype(int)
     repeated = [i for i in infected for _ in range(smoothing)]
-    encoder = recording.parallel_encode(plot, repeated, centers, scales, steps, points=points, N=4, fps=4*smoothing)
-    return recording.notebook(encoder)
+    encoder = recording.parallel_encode(
+                                plot, repeated, centers, scales, steps, 
+                                points=points, N=8, fps=4*smoothing)
 
-# from pybbfmm.demo.plotting import *
-# import pathlib
-# import pickle
+    html, _ = recording.html_tag(encoder)
+    pathlib.Path('output/demo.html').write_text(html)
 
-# globals().update(pickle.loads(pathlib.Path('output/tmp.pkl').read_bytes()))
+    return display(HTML(html))
