@@ -76,6 +76,8 @@ def load():
     return pickle.loads(pathlib.Path('output/tmp.pkl').read_bytes())
 
 def run(**kwargs):
+    print('Running simulation...')
     infected, points = simulate(**kwargs)
     save(infected, points)
+    print('Rendering...')
     plotting.animate(infected, points)

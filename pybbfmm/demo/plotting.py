@@ -65,7 +65,7 @@ def animate(infected, points, smoothing=4):
     repeated = [i for i in infected for _ in range(smoothing)]
     encoder = recording.parallel_encode(
                                 plot, repeated, centers, scales, steps, 
-                                points=points, N=8, fps=4*smoothing)
+                                points=points, N=0, fps=4*smoothing)
 
     html, _ = recording.html_tag(encoder)
     pathlib.Path('output/demo.html').write_text(html)
