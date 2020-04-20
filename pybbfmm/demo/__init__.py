@@ -18,7 +18,8 @@ def adapt(risk):
     # to two infected people, your chance of infection is $1 - (1 - r)^2$.
     # 
     # n-body solvers expect additive kernels though, so here we take the
-    # log of the compliment. 
+    # log of the compliment. We'll recover the infection risk after the 
+    # solver's done the summing for us.
     def log_nonrisk(a, b):
         return torch.log(1 - risk(a, b).clamp(None, .9999))
 
