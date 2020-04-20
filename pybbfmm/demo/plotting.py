@@ -22,8 +22,8 @@ def interpolated_viewports(infected, points, smoothing):
 
     t0s = np.arange(len(centers))
     ts = np.linspace(0, len(centers), smoothing*len(centers)+1)[:-1]
-    smooth_centers = np.stack([scipy.interpolate.UnivariateSpline(t0s, c, s=20*len(t0s), ext='const')(ts) for c in centers.T], -1)
-    smooth_scales = scipy.interpolate.UnivariateSpline(t0s, scales, s=20*len(t0s), ext='const')(ts)
+    smooth_centers = np.stack([scipy.interpolate.UnivariateSpline(t0s, c, s=5000, ext='const')(ts) for c in centers.T], -1)
+    smooth_scales = scipy.interpolate.UnivariateSpline(t0s, scales, s=5000, ext='const')(ts)
 
     return smooth_centers, smooth_scales
 
@@ -53,7 +53,7 @@ def plot(charges, center, scale, step, points, threshold=1e-1, res=1000):
     np.divide(sums, counts, out=means, where=counts > 0)
 
     (l, b), (r, t) = center - scale, center + scale
-    means = scipy.ndimage.gaussian_filter(means, .05/scale*res)
+    means = scipy.ndimage.gaussian_filter(means, .1/scale*res)
     ax.imshow(means, extent=(l, r, b, t))
     
     return fig
