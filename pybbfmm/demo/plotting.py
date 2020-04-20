@@ -24,14 +24,14 @@ def interpolated_viewports(infected, points, smoothing):
 
     return smooth_centers, smooth_scales
 
-def plot(charges, center, scale, points, threshold=1e-1, res=1000):
+def plot(charges, center, scale, step, points, threshold=1e-1, res=1000):
     visible = (points > center - scale).all(-1) & (points < center + scale).all(-1)
 
     points, charges = points[visible], charges[visible]
 
     fig, ax = plt.subplots()
     ax.set_aspect(1)
-    ax.set_title(f'{(charges > threshold).sum()} infected')
+    ax.set_title(f'#{step}: {(charges > threshold).sum():2g} infected')
     ax.set_xticks([])
     ax.set_yticks([])
 
@@ -57,8 +57,9 @@ def plot(charges, center, scale, points, threshold=1e-1, res=1000):
 
 def animate(infected, points, smoothing=4):
     centers, scales = interpolated_viewports(infected, points, smoothing)
+    steps = (np.arange(len(centers))/smoothing).astype(int)
     repeated = [i for i in infected for _ in range(smoothing)]
-    encoder = recording.parallel_encode(plot, repeated, centers, scales, points=points, N=4, fps=4*smoothing)
+    encoder = recording.parallel_encode(plot, repeated, centers, scales, steps, points=points, N=4, fps=4*smoothing)
     return recording.notebook(encoder)
 
 # from pybbfmm.demo.plotting import *
