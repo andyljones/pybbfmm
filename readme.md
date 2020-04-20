@@ -1,4 +1,12 @@
-This is a prototype GPU-accelerated black-box fast multipole method. On a RTX 2080, it evaluates a 2D million-point n-body problem in 500ms. It can handle problems of any dimension, and arbitrary kernels can be defined entirely in Python.
+This is a prototype optionally-GPU-accelerated black-box fast multipole method. On a RTX 2080, it evaluates a 10m-point community transmission problem in 4s per timestep.
+
+While optimized for 2D problems in the million-point-scale, the code supports problems with any number of dimensions, with arbitrary kernels defined entirely in Python.
+
+## Demo
+
+**This is just a tech demo, not an epidemiological model**
+
+<p align="center"><img src="pybbfmm/demo/demo.gif"></p>
 
 ## Background
 This grew out of some exploratory work on replicating epidemiological models. I found that the slow part of the spatiotemporal model I was looking at was the community transmission step, where each contagious person radiates a cloud of infectiousness. This is in many ways similar to how n-body simulations work, and yet I couldn't find anything in the epidemiological literature about accelerating community transmission calculations using fast multipole methods.

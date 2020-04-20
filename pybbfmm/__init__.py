@@ -125,8 +125,8 @@ def target_far_field(F, scaled, cheb, tree, indices, chunksize=int(1e6)):
         potentials[i:i+chunksize] = (S*F[idx_chunk]).sum(-1)
     return potentials
 
-def presolve(prob):
-    cheb = chebyshev.Chebyshev(4, prob.sources.shape[1], device='cuda')
+def presolve(prob, N=4):
+    cheb = chebyshev.Chebyshev(N, prob.sources.shape[1], device='cuda')
     scaled = scale(prob)
     tree, indices, depths = orthantree.orthantree(scaled)
     scheme = orthantree.interaction_scheme(tree, depths)
@@ -154,8 +154,8 @@ def evaluate(cheb, scaled, tree, scheme, indices, depths):
     potential = f + w + u
     return potential
 
-def solve(prob):
-    presoln = presolve(prob)
+def solve(prob, N=4):
+    presoln = presolve(prob, N)
     return evaluate(**presoln)
 
 def run():
