@@ -9,6 +9,8 @@ from aljpy import arrdict, recording
 from . import adaptive
 from tqdm.auto import tqdm
 import matplotlib.pyplot as plt
+import scipy as sp
+import scipy.ndimage
 
 LOGIN = 'https://data-package.ceh.ac.uk/sso/login'
 DATA = 'https://data-package.ceh.ac.uk/data/0995e94d-6d42-40c1-8ed4-5090d82471e1.zip'
@@ -53,7 +55,7 @@ def pop_points(n=1e3):
 
 def risk_kernel(a, b):
     d = (a - b).pow(2).sum(-1).pow(.5)
-    return .001 * 1/(1 + (d/4)**3)
+    return .0001 * 1/(1 + (d/4)**3)
 
 def kernel(a, b):
     # We want to take products of non-infection kernels here
@@ -69,34 +71,41 @@ def nbody_problem(pop):
     prob['kernel'] = kernel
     return prob
 
-def render(charges, points, threshold=1e-2, eps=.1, res=1000):
+def render(charges, points, threshold=1e-1, eps=10, res=1000):
+    threshold = threshold*charges.max()
     lims = np.stack([
         points[charges > threshold].min(0) - eps,
         points[charges > threshold].max(0) + eps])
+    center = lims.mean(0)
+    scale = (lims[1] - lims[0]).max()/2
 
-    visible = (points > lims[0]).all(-1) & (points < lims[1]).all(-1)
+    visible = (points > center - scale).all(-1) & (points < center + scale).all(-1)
 
     points, charges = points[visible], charges[visible]
 
     fig, ax = plt.subplots()
     ax.set_aspect(1)
-    fig.set_size_inches(16, 16)
-    if len(points) < 2000:
-        ax.scatter(*points.T, c=charges, s=1)
-    else:
-        xy = (res*(points - lims[0])/(lims[1] - lims[0]))
-        ij = np.stack([res - xy[:, 1], xy[:, 0]], -1).astype(int).clip(0, res-1)
+    ax.set_title(f'{(charges > threshold).sum()} infected')
+    ax.set_xticks([])
+    ax.set_yticks([])
 
-        sums = np.zeros((res, res))
-        np.add.at(sums, tuple(ij.T), charges)
+    fig.set_size_inches(res/fig.get_dpi(), res/fig.get_dpi())
 
-        counts = np.zeros((res, res))
-        np.add.at(counts, tuple(ij.T), np.ones_like(charges))
+    xy = (res*(points - (center - scale))/(2*scale))
+    ij = np.stack([res - xy[:, 1], xy[:, 0]], -1).astype(int).clip(0, res-1)
 
-        means = np.full((res, res), np.nan)
-        np.divide(sums, counts, out=means, where=counts > 0)
+    sums = np.zeros((res, res))
+    np.add.at(sums, tuple(ij.T), charges)
 
-        ax.imshow(means, extent=(*lims[:, 0], *lims[:, 1]))
+    counts = np.zeros((res, res))
+    np.add.at(counts, tuple(ij.T), np.ones_like(charges))
+
+    means = np.full((res, res), 0.)
+    np.divide(sums, counts, out=means, where=counts > 0)
+
+    (l, b), (r, t) = center - scale, center + scale
+    means = sp.ndimage.gaussian_filter(means, .025/scale*res)
+    ax.imshow(means, extent=(l, r, b, t))
     
     return fig
 
@@ -108,14 +117,16 @@ def run(n=10e3):
     # Set patient zero
     presoln.scaled.charges[0] = 1.
 
-    risks = []
+    infected = []
     for t in tqdm(range(10)):
+        infected.append(presoln.scaled.charges.cpu().numpy())
+
         log_nonrisk = adaptive.evaluate(**presoln)
         risk = 1 - torch.exp(log_nonrisk)
         
         rands = torch.rand_like(risk)
-        presoln.scaled.charges = (rands < risk).float()
-        risks.append(risk.cpu().numpy())
-
-    encoder = recording.parallel_encode(render, risks, points=prob.targets.cpu().numpy(), N=0, fps=1)
+        presoln.scaled.charges = ((rands < risk) | (0 < presoln.scaled.charges)).float()
+        print(presoln.scaled.charges.sum())
+        
+    encoder = recording.parallel_encode(render, infected, points=prob.targets.cpu().numpy(), N=0, fps=4)
     recording.notebook(encoder)
