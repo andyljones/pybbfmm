@@ -7,10 +7,12 @@ def quad_kernel(a, b):
     return 1/((a - b)**2).sum(-1)
 
 def random_problem(S=3, T=5, D=2):
-    return arrdict.arrdict(
+    prob = arrdict.arrdict(
         sources=np.random.uniform(-1., +1., (S, D)),
         charges=np.random.uniform(.1, 1., (S,)),
         targets=np.random.uniform(-1., +1., (T, D))).map(torch.tensor).float().cuda()
+    prob['kernel'] = quad_kernel
+    return prob
 
 def v_w_problem():
     return arrdict.arrdict(

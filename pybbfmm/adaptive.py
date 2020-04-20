@@ -3,7 +3,6 @@ from aljpy import arrdict
 from . import test, chebyshev, orthantree, sets, ragged
 import torch
 
-KERNEL = test.quad_kernel
 EPS = 1e-2
 
 def limits(prob):
@@ -24,7 +23,8 @@ def scale(prob):
         scale=scale,
         sources=(prob.sources - mid)/scale,
         charges=prob.charges,
-        targets=(prob.targets - mid)/scale)
+        targets=(prob.targets - mid)/scale,
+        kernel=lambda a, b: prob.kernel(a*scale, b*scale))
 
 def weights(scaled, cheb, tree, indices):
     leaves = tree.terminal.nonzero()
@@ -47,17 +47,19 @@ def weights(scaled, cheb, tree, indices):
 
     return W
 
-def node_locations(scaled, cheb, tree, indices):
-    return scaled.scale*(cheb.nodes[None]/2**tree.depths[indices, None, None] + tree.centers[indices, None, :])
+def node_locations(cheb, tree, indices):
+    return cheb.nodes[None]/2**tree.depths[indices, None, None] + tree.centers[indices, None, :]
 
 def v_interactions(W, scaled, cheb, tree, scheme):
     ixns = torch.zeros_like(W) 
     for v in scheme.v:
-        scale = scaled.scale/2**v.depth
+        scale = 1/2**v.depth.float()
         boxes = scale*cheb.nodes
         friends = scale*(2*v.offset + cheb.nodes)
-        k = KERNEL(boxes[None, :], friends[:, None])
+        k = scaled.kernel(boxes[None, :], friends[:, None])
         ixns[v.boxes] += W[v.friends] @ k
+        if torch.isnan(ixns).any():
+            breakpoint()
     
     return ixns
 
@@ -70,7 +72,9 @@ def x_interactions(scaled, cheb, tree, indices, scheme):
         for s in range(box_to_source.max_k):
             sources, partner_mask = box_to_source.kth(partner, s) 
             boxes = tree.id[box_mask][partner_mask]
-            K = KERNEL(node_locations(scaled, cheb, tree, boxes), scaled.scale*scaled.sources[sources, None, :])
+            K = scaled.kernel(
+                    node_locations(cheb, tree, boxes), 
+                    scaled.sources[sources, None, :])
             ixns[boxes] += K*scaled.charges[sources, None]
     
     return ixns
@@ -79,9 +83,9 @@ def w_interactions(W, scaled, cheb, tree, indices, scheme):
     ixns = scaled.charges.new_zeros(len(scaled.targets))
     for p in range(scheme.w.max_k):
         partner, box_mask = scheme.w.kth(indices.targets, p)
-        targets = scaled.scale*scaled.targets[box_mask, None, :]
-        partner_nodes = node_locations(scaled, cheb, tree, partner)
-        K = KERNEL(targets, partner_nodes)
+        targets = scaled.targets[box_mask, None, :]
+        partner_nodes = node_locations(cheb, tree, partner)
+        K = scaled.kernel(targets, partner_nodes)
         ixns[box_mask.nonzero().squeeze(1)] += (K*W[partner]).sum(-1)
     return ixns
 
@@ -94,7 +98,9 @@ def u_interactions(scaled, indices, scheme):
         for s in range(box_to_source.max_k):
             sources, box_mask = box_to_source.kth(boxes, s)
             targets = target_idxs[target_mask][box_mask]
-            K = KERNEL(scaled.scale*scaled.targets[target_mask][box_mask], scaled.scale*scaled.sources[sources])
+            K = scaled.kernel(
+                    scaled.targets[target_mask][box_mask], 
+                    scaled.sources[sources])
             ixns[targets] += K*scaled.charges[sources]
     return ixns
         
