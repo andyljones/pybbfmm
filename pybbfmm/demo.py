@@ -67,8 +67,34 @@ def nbody_problem(pop):
     prob['kernel'] = kernel
     return prob
 
-def render(points, charges):
-    pass
+def render(points, charges, threshold=1e-2, eps=.1, res=1000):
+    lims = np.stack([
+        points[charges > threshold].min(0) - eps,
+        points[charges > threshold].max(0) + eps])
+
+    visible = (points > lims[0]).all(-1) & (points < lims[1]).all(-1)
+
+    points, charges = points[visible], charges[visible]
+
+    fig, ax = plt.subplots()
+    ax.set_aspect(1)
+    fig.set_size_inches(16, 16)
+    if len(points) < 2000:
+        ax.scatter(*points.T, c=charges, s=1)
+    else:
+        xy = (res*(points - lims[0])/(lims[1] - lims[0]))
+        ij = np.stack([res - xy[:, 1], xy[:, 0]], -1).astype(int).clip(0, res-1)
+
+        sums = np.zeros((res, res))
+        np.add.at(sums, tuple(ij.T), charges)
+
+        counts = np.zeros((res, res))
+        np.add.at(counts, tuple(ij.T), np.ones_like(charges))
+
+        means = np.full((res, res), np.nan)
+        np.divide(sums, counts, out=means, where=counts > 0)
+
+        ax.imshow(means, extent=(*lims[:, 0], *lims[:, 1]))
 
 def run(n=10e3):
     pop = pop_points(n=n)
