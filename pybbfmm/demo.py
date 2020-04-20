@@ -34,9 +34,10 @@ def density_map():
 
 def pop_coordinates():
     """Distribute the population around the country, returning a Px2 array of their coordinates relative to the 
-    top-left corner."""
+    bottom-right corner."""
     density = density_map()
     density = density/np.nansum(density)
+    density[np.isnan(density)] = 0.
 
     # Pick a grid cell for each person in proportion to the density
     valid = (density > 0)
@@ -49,4 +50,7 @@ def pop_coordinates():
     indices = indices.cumsum() - 1
 
     # Pick a uniformly random spot in the grid cell
-    return coords[indices, :] + np.random.rand(len(indices), 2)
+    ij = coords[indices, :] + np.random.rand(len(indices), 2)
+    xy = np.stack([ij[:, 1], len(density) - ij[:, 0]], -1)
+
+    return xy
