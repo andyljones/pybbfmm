@@ -7,13 +7,20 @@ from tqdm.auto import tqdm
 from .. import presolve, evaluate
 from . import population, plotting
 
-def risk_kernel(a, b):
-    # Community transmission kernel from `Strategies for mitigating an influenza pandemic.`,
-    # multiplied by a hand-picked constant to get the animation looking nice.
-    d = (a - b).pow(2).sum(-1).pow(.5)
-    return .0001 * 1/(1 + (d/4)**3)
+def scale_risk_kernel(n):
 
-def adapt(risk):
+    # For demo purposes, we want to scale infectiousness against pop 
+    infectiousness = 1e-4/(n/10e6)
+
+    def risk_kernel(a, b):
+        # Community transmission kernel from `Strategies for mitigating an influenza pandemic.`,
+        # multiplied by a hand-picked constant to get the animation looking nice.
+        d = (a - b).pow(2).sum(-1).pow(.5)
+        return infectiousness * 1/(1 + (d/4)**3)
+    
+    return risk_kernel
+
+def wrap(risk):
     # Infection risk is multiplicative in its complement: if you're exposed
     # to two infected people, your chance of infection is $1 - (1 - r)^2$.
     # 
@@ -25,9 +32,10 @@ def adapt(risk):
 
     return log_nonrisk
 
-def simulate(n=10e3, T=40, device='cuda'):
-    print(f'This demo will be for {n} agents and {T} timesteps on device "{device}".')
+def simulate(n=10e3, T=40, device='cpu'):
+    print(f'This demo will be for {int(n)} agents and {T} timesteps on device "{device}".')
     print('The default values are fairly small, so as not to frustrate anyone with out-of-memory errors. Pass larger ones if you want.')
+    print('Pass device="cuda" to run on the GPU')
 
     # Get a population
     pop = population.points(n=n)
@@ -39,8 +47,13 @@ def simulate(n=10e3, T=40, device='cuda'):
         charges=np.zeros(len(pop))
     ).map(torch.as_tensor).float().to(device)
 
+    # Create our risk kernel. Usually this'd be hard coded, but we want the
+    # demo to be interesting for a range of population densities, so it needs
+    # to be variable.
+    risk_kernel = scale_risk_kernel(n)
+
     # Wrap the risk kernel so it can be fed into the solver
-    prob['kernel'] = adapt(risk_kernel)
+    prob['kernel'] = wrap(risk_kernel)
 
     # Do the presolve
     presoln = presolve(prob)

@@ -47,7 +47,7 @@ def density_map():
     arr[arr == -9999] = np.nan
     return arr
 
-def points(n=1e3):
+def points(n):
     """Distribute the population around the country, returning a Px2 array of their coordinates relative to the 
     bottom-right corner."""
     density = density_map()
