@@ -5,9 +5,10 @@ import yaml
 import numpy as np
 from io import BytesIO
 import torch
-from aljpy import arrdict 
+from aljpy import arrdict, recording
 from . import adaptive
 from tqdm.auto import tqdm
+import matplotlib.pyplot as plt
 
 LOGIN = 'https://data-package.ceh.ac.uk/sso/login'
 DATA = 'https://data-package.ceh.ac.uk/data/0995e94d-6d42-40c1-8ed4-5090d82471e1.zip'
@@ -52,10 +53,11 @@ def pop_points(n=1e3):
 
 def risk_kernel(a, b):
     d = (a - b).pow(2).sum(-1).pow(.5)
-    return .01 * 1/(1 + (d/4)**3)
+    return .001 * 1/(1 + (d/4)**3)
 
 def kernel(a, b):
     # We want to take products of non-infection kernels here
+    # Cutoff at .9999 risk to suppress infinities
     return torch.log(1 - risk_kernel(a, b).clamp(None, .9999))
 
 def nbody_problem(pop):
@@ -67,7 +69,7 @@ def nbody_problem(pop):
     prob['kernel'] = kernel
     return prob
 
-def render(points, charges, threshold=1e-2, eps=.1, res=1000):
+def render(charges, points, threshold=1e-2, eps=.1, res=1000):
     lims = np.stack([
         points[charges > threshold].min(0) - eps,
         points[charges > threshold].max(0) + eps])
@@ -95,6 +97,8 @@ def render(points, charges, threshold=1e-2, eps=.1, res=1000):
         np.divide(sums, counts, out=means, where=counts > 0)
 
         ax.imshow(means, extent=(*lims[:, 0], *lims[:, 1]))
+    
+    return fig
 
 def run(n=10e3):
     pop = pop_points(n=n)
@@ -104,9 +108,14 @@ def run(n=10e3):
     # Set patient zero
     presoln.scaled.charges[0] = 1.
 
+    risks = []
     for t in tqdm(range(10)):
         log_nonrisk = adaptive.evaluate(**presoln)
         risk = 1 - torch.exp(log_nonrisk)
         
         rands = torch.rand_like(risk)
         presoln.scaled.charges = (rands < risk).float()
+        risks.append(risk.cpu().numpy())
+
+    encoder = recording.parallel_encode(render, risks, points=prob.targets.cpu().numpy(), N=0, fps=1)
+    recording.notebook(encoder)
