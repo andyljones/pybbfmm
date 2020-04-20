@@ -1,4 +1,4 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 
 setup(name='pybbfmm',
       version='0.1',
@@ -6,7 +6,7 @@ setup(name='pybbfmm',
       author='Andy Jones',
       author_email='andyjones.ed@gmail.com',
       url='https://github.com/andyljones/pybbfmm',
-      packages=['pybbfmm'],
+      packages=find_packages(),
       python_requires='>=3.6',
       install_requires=[
           'torch>=1.4', 'aljpy>=0.4', 'numpy>=1.18'],
