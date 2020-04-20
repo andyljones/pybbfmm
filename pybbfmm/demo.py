@@ -71,13 +71,23 @@ def nbody_problem(pop):
     prob['kernel'] = kernel
     return prob
 
-def render(charges, points, threshold=1e-1, eps=10, res=1000):
+def viewport(charges, points, threshold=1e-1, eps=10):
     threshold = threshold*charges.max()
     lims = np.stack([
         points[charges > threshold].min(0) - eps,
         points[charges > threshold].max(0) + eps])
     center = lims.mean(0)
     scale = (lims[1] - lims[0]).max()/2
+    return center, scale
+
+def interpolated_viewport(charges, next, increment, points):
+    c1, s1 = viewport(charges, points)
+    c2, s2 = viewport(next, points)
+    return c1*(1-increment) + c2*increment, s1*(1-increment) + s2*increment
+
+
+def render(charges, next, increment, points, threshold=1e-1, res=1000):
+    center, scale = interpolated_viewport(charges, next, increment, points)
 
     visible = (points > center - scale).all(-1) & (points < center + scale).all(-1)
 
@@ -118,7 +128,7 @@ def run(n=10e3):
     presoln.scaled.charges[0] = 1.
 
     infected = []
-    for t in tqdm(range(10)):
+    for t in tqdm(range(120)):
         infected.append(presoln.scaled.charges.cpu().numpy())
 
         log_nonrisk = adaptive.evaluate(**presoln)
@@ -127,6 +137,11 @@ def run(n=10e3):
         rands = torch.rand_like(risk)
         presoln.scaled.charges = ((rands < risk) | (0 < presoln.scaled.charges)).float()
         print(presoln.scaled.charges.sum())
-        
-    encoder = recording.parallel_encode(render, infected, points=prob.targets.cpu().numpy(), N=0, fps=4)
+
+    smoothing = 4
+    points = prob.targets.cpu().numpy()
+    firsts = [i for i in infected[:-1] for _ in range(smoothing)]
+    seconds = [i for i in infected[1:] for _ in range(smoothing)]
+    increment = np.arange(0, len(infected)-1, 1/4) % 1
+    encoder = recording.parallel_encode(render, firsts, seconds, increment, points=points, N=16, fps=4*smoothing)
     recording.notebook(encoder)
