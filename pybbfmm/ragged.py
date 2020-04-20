@@ -50,7 +50,12 @@ def from_pairs(pairs, n_ps, n_qs):
     qs, ps = pairs.T
     sort = torch.sort(qs)
     image = ps[sort.indices]
-    unique, counts = torch.unique_consecutive(sort.values, return_counts=True)
+    # As of Pytorch 1.4, unique_consecutive breaks on empty inputs. 
+    if len(pairs) > 0:
+        unique, counts = torch.unique_consecutive(sort.values, return_counts=True)
+    else:
+        unique, counts = torch.zeros_like(sort.values), torch.zeros_like(sort.values)
+
 
     cardinalities = qs.new_zeros(n_qs)
     cardinalities[unique] = counts 
@@ -59,7 +64,12 @@ def from_pairs(pairs, n_ps, n_qs):
 
 def invert_indices(qs, n_qs):
     sort = torch.sort(qs)
-    unique, counts = torch.unique_consecutive(sort.values, return_counts=True)
+    # As of Pytorch 1.4, unique_consecutive breaks on empty inputs. 
+    if len(qs) > 0:
+        unique, counts = torch.unique_consecutive(sort.values, return_counts=True)
+    else:
+        unique, counts = torch.zeros_like(sort.values), torch.zeros_like(sort.values)
+
     cardinalities = qs.new_zeros(n_qs)
     cardinalities[unique] = counts 
     return Ragged(sort.indices, cardinalities)
