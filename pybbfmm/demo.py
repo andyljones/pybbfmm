@@ -50,9 +50,13 @@ def pop_points(n=1e3):
 
     return xy
 
-def kernel(a, b):
+def risk_kernel(a, b):
     d = (a - b).pow(2).sum(-1).pow(.5)
-    return 1/(1 + (d/4)**3)
+    return .01 * 1/(1 + (d/4)**3)
+
+def kernel(a, b):
+    # We want to take products of non-infection kernels here
+    return torch.log(1 - risk_kernel(a, b).clamp(None, .9999))
 
 def nbody_problem(pop):
     prob = arrdict.arrdict(
@@ -63,7 +67,7 @@ def nbody_problem(pop):
     prob['kernel'] = kernel
     return prob
 
-def render():
+def render(points, charges):
     pass
 
 def run(n=10e3):
@@ -75,7 +79,8 @@ def run(n=10e3):
     presoln.scaled.charges[0] = 1.
 
     for t in tqdm(range(10)):
-        risk = adaptive.evaluate(**presoln)
+        log_nonrisk = adaptive.evaluate(**presoln)
+        risk = 1 - torch.exp(log_nonrisk)
         
         rands = torch.rand_like(risk)
         presoln.scaled.charges = (rands < risk).float()
