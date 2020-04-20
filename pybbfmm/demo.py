@@ -4,11 +4,12 @@ import aljpy
 import yaml
 import numpy as np
 from io import BytesIO
+import torch
+from aljpy import arrdict 
+from . import adaptive
 
 LOGIN = 'https://data-package.ceh.ac.uk/sso/login'
 DATA = 'https://data-package.ceh.ac.uk/data/0995e94d-6d42-40c1-8ed4-5090d82471e1.zip'
-
-POPULATION = 65e3
 
 def credentials():
     return yaml.safe_load(open('credentials.yml', 'r'))['CEH']
@@ -32,7 +33,7 @@ def density_map():
     arr[arr == -9999] = np.nan
     return arr
 
-def pop_coordinates():
+def pop_points(n=1e3):
     """Distribute the population around the country, returning a Px2 array of their coordinates relative to the 
     bottom-right corner."""
     density = density_map()
@@ -44,7 +45,7 @@ def pop_coordinates():
     coords = np.stack(valid.nonzero(), -1)
     ds = density[valid]
 
-    occupancy = np.round(POPULATION*ds).astype(int).clip(1, None)
+    occupancy = np.round(int(n)*ds).astype(int).clip(1, None)
     indices = np.zeros(occupancy.sum()+1, dtype=int)
     indices[occupancy.cumsum() - occupancy] = 1
     indices = indices.cumsum() - 1
@@ -54,3 +55,24 @@ def pop_coordinates():
     xy = np.stack([ij[:, 1], len(density) - ij[:, 0]], -1)
 
     return xy
+
+def kernel(a, b):
+    d = (a - b).pow(2).sum(-1).pow(.5)
+    return 1/(1 + (d/4)**3)
+
+def random_problem(*args, p=10, **kwargs):
+    points = pop_points(*args, **kwargs)
+    charges = np.zeros(len(points))
+    charges[np.random.choice(np.arange(len(points)), p)] = 1.
+    prob = arrdict.arrdict(
+        sources=points,
+        targets=points,
+        charges=charges
+    ).map(torch.as_tensor).float().cuda()
+    prob['kernel'] = kernel
+    return prob
+
+def run():
+    prob = random_problem(n=10e6)
+    presoln = adaptive.presolve(prob)
+    soln = adaptive.evaluate(**presoln)

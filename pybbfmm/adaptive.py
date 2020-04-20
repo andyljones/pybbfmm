@@ -58,8 +58,6 @@ def v_interactions(W, scaled, cheb, tree, scheme):
         friends = scale*(2*v.offset + cheb.nodes)
         k = scaled.kernel(boxes[None, :], friends[:, None])
         ixns[v.boxes] += W[v.friends] @ k
-        if torch.isnan(ixns).any():
-            breakpoint()
     
     return ixns
 
@@ -128,11 +126,20 @@ def target_far_field(F, scaled, cheb, tree, indices, chunksize=int(1e6)):
         potentials[i:i+chunksize] = (S*F[idx_chunk]).sum(-1)
     return potentials
 
-def solve(prob):
+def presolve(prob):
     cheb = chebyshev.Chebyshev(4, prob.sources.shape[1], device='cuda')
     scaled = scale(prob)
     tree, indices, depths = orthantree.orthantree(scaled)
     scheme = orthantree.interaction_scheme(tree, depths)
+    return aljpy.dotdict(
+        cheb=cheb, 
+        scaled=scaled, 
+        tree=tree, 
+        scheme=scheme,
+        indices=indices,
+        depths=depths)
+
+def evaluate(cheb, scaled, tree, scheme, indices, depths):
 
     W = weights(scaled, cheb, tree, indices)
 
@@ -147,6 +154,10 @@ def solve(prob):
 
     potential = f + w + u
     return potential
+
+def solve(prob):
+    presoln = presolve(prob)
+    return evaluate(**presoln)
 
 def run():
     prob = test.random_problem(S=100, T=100)
