@@ -35,7 +35,7 @@ def wrap(risk):
 def simulate(n=10e3, T=40, device='cpu'):
     print(f'This demo will be for {int(n)} agents and {T} timesteps on device "{device}".')
     print('The default values are fairly small, so as not to frustrate anyone with out-of-memory errors. Pass larger ones if you want.')
-    print('Pass device="cuda" to run on the GPU')
+    print('Pass device="cuda" to run on the GPU. On Colab, you may need to enable it first under Edit->Notebook Settings.')
 
     print('Generating a population...')
     pop = population.points(n=n)
