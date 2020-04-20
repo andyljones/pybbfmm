@@ -25,7 +25,7 @@ def adapt(risk):
 
     return log_nonrisk
 
-def simulate(n=10e6, T=120):
+def simulate(n=10e6, T=120, device='cuda'):
     # Get a population
     pop = population.points(n=n)
 
@@ -34,7 +34,7 @@ def simulate(n=10e6, T=120):
         sources=pop,
         targets=pop,
         charges=np.zeros(len(pop))
-    ).map(torch.as_tensor).float().cuda()
+    ).map(torch.as_tensor).float().to(device)
 
     # Wrap the risk kernel so it can be fed into the solver
     prob['kernel'] = adapt(risk_kernel)
@@ -71,7 +71,7 @@ def save(infected, points):
 def load():
     return pickle.loads(pathlib.Path('output/tmp.pkl').read_bytes())
 
-def run():
-    infected, points = simulate()
+def run(**kwargs):
+    infected, points = simulate(**kwargs)
     save(infected, points)
     plotting.animate(infected, points)
