@@ -37,7 +37,7 @@ def simulate(n=10e3, T=40, device='cpu'):
     print('The default values are fairly small, so as not to frustrate anyone with out-of-memory errors. Pass larger ones if you want.')
     print('Pass device="cuda" to run on the GPU')
 
-    # Get a population
+    print('Generating a population...')
     pop = population.points(n=n)
 
     # Phrase it as an n-body problem and stick it on the GPU
@@ -45,7 +45,7 @@ def simulate(n=10e3, T=40, device='cpu'):
         sources=pop,
         targets=pop,
         charges=np.zeros(len(pop))
-    ).map(torch.as_tensor).float().to(device)
+    ).map(lambda t: torch.as_tensor(t).float().to(device))
 
     # Create our risk kernel. Usually this'd be hard coded, but we want the
     # demo to be interesting for a range of population densities, so it needs
@@ -55,13 +55,13 @@ def simulate(n=10e3, T=40, device='cpu'):
     # Wrap the risk kernel so it can be fed into the solver
     prob['kernel'] = wrap(risk_kernel)
 
-    # Do the presolve
+    print('Presolving...')
     presoln = presolve(prob)
 
     # Set patient zero - the infection status is independent of the presolve!
     presoln.scaled.charges[0] = 1.
 
-    # Run the simulation!
+    print('Running main loop...')
     infected = [presoln.scaled.charges.cpu().numpy()]
     for t in tqdm(range(T)):
         # Evaluate the total risk over all n^2 pairs of points

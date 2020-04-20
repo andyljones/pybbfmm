@@ -10,7 +10,8 @@ def random_problem(S=3, T=5, D=2, device='cuda'):
     prob = arrdict.arrdict(
         sources=np.random.uniform(-1., +1., (S, D)),
         charges=np.random.uniform(.1, 1., (S,)),
-        targets=np.random.uniform(-1., +1., (T, D))).map(torch.tensor).float().to(device)
+        targets=np.random.uniform(-1., +1., (T, D))
+    ).map(lambda t: torch.as_tensor(t).float().to(device))
     prob['kernel'] = quad_kernel
     return prob
 
