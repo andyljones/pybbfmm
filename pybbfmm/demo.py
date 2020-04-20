@@ -143,5 +143,11 @@ def run(n=10e3):
     firsts = [i for i in infected[:-1] for _ in range(smoothing)]
     seconds = [i for i in infected[1:] for _ in range(smoothing)]
     increment = np.arange(0, len(infected)-1, 1/4) % 1
-    encoder = recording.parallel_encode(render, firsts, seconds, increment, points=points, N=16, fps=4*smoothing)
+    encoder = recording.parallel_encode(render, firsts, seconds, increment, points=points, N=4, fps=4*smoothing)
     recording.notebook(encoder)
+
+# from pybbfmm.demo import *
+# import pathlib
+# import pickle
+
+# globals().update(pickle.loads(pathlib.Path('output/tmp.pkl').read_bytes()))
