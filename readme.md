@@ -8,7 +8,7 @@ While optimized for 2D problems in the million-point-scale, the code supports pr
 
 <p align="center"><img src="pybbfmm/demo/demo.gif"></p>
 
-This demonstrates the acceleration of a community transmission kernel. It simulates 10 million agents, the infected of whom emit a cloud a few kilometres across. This cloud represents agents' random interactions in their community. At each step, the method evaluates all 100tn pairs of interactions to figure out who else is at risk of infection. It takes about 4 seconds per step. 
+This demonstrates the acceleration of a community transmission kernel. It simulates 10 million agents, the infected of whom emit a cloud a few kilometres across. This cloud represents agents' random interactions in their community. At each step, the method evaluates all 100tn pairs of interactions to figure out who else is at risk of infection. Each step takes about 4s. Extrapolating from smaller problems, the direct approach would take 4h on the same GPU, or about a week on the CPU.
 
 [You can find the code here](pybbfmm/demo/__init__.py).
 
