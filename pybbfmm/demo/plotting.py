@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from aljpy import recording
 import scipy.ndimage
+import scipy.interpolate
 
 def viewport(charges, points, threshold=1e-1, eps=10):
     threshold = threshold*charges.max()
@@ -12,14 +13,18 @@ def viewport(charges, points, threshold=1e-1, eps=10):
     scale = (lims[1] - lims[0]).max()/2
     return center, scale
 
-def interpolated_viewport(charges, next, increment, points):
-    c1, s1 = viewport(charges, points)
-    c2, s2 = viewport(next, points)
-    return c1*(1-increment) + c2*increment, s1*(1-increment) + s2*increment
+def interpolated_viewports(infected, points, smoothing):
+    centers, scales = zip(*[viewport(i, points) for i in infected])
+    centers, scales = np.stack(centers), np.stack(scales)
 
-def plot(charges, next, increment, points, threshold=1e-1, res=1000):
-    center, scale = interpolated_viewport(charges, next, increment, points)
+    t0s = np.arange(len(centers))
+    ts = np.linspace(0, len(centers), smoothing*len(centers)+1)[:-1]
+    smooth_centers = np.stack([scipy.interpolate.UnivariateSpline(t0s, c, s=20*len(t0s), ext='const')(ts) for c in centers.T], -1)
+    smooth_scales = scipy.interpolate.UnivariateSpline(t0s, scales, s=20*len(t0s), ext='const')(ts)
 
+    return smooth_centers, smooth_scales
+
+def plot(charges, center, scale, points, threshold=1e-1, res=1000):
     visible = (points > center - scale).all(-1) & (points < center + scale).all(-1)
 
     points, charges = points[visible], charges[visible]
@@ -45,20 +50,18 @@ def plot(charges, next, increment, points, threshold=1e-1, res=1000):
     np.divide(sums, counts, out=means, where=counts > 0)
 
     (l, b), (r, t) = center - scale, center + scale
-    means = scipy.ndimage.gaussian_filter(means, .025/scale*res)
+    means = scipy.ndimage.gaussian_filter(means, .05/scale*res)
     ax.imshow(means, extent=(l, r, b, t))
     
     return fig
 
-def animate(infected, points):
-    smoothing = 4
-    firsts = [i for i in infected[:-1] for _ in range(smoothing)]
-    seconds = [i for i in infected[1:] for _ in range(smoothing)]
-    increment = np.arange(0, len(infected)-1, 1/4) % 1
-    encoder = recording.parallel_encode(render, firsts, seconds, increment, points=points, N=4, fps=4*smoothing)
+def animate(infected, points, smoothing=4):
+    centers, scales = interpolated_viewports(infected, points, smoothing)
+    repeated = [i for i in infected for _ in range(smoothing)]
+    encoder = recording.parallel_encode(plot, repeated, centers, scales, points=points, N=4, fps=4*smoothing)
     return recording.notebook(encoder)
 
-# from pybbfmm.demo import *
+# from pybbfmm.demo.plotting import *
 # import pathlib
 # import pickle
 
