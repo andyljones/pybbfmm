@@ -5,3 +5,5 @@ __pycache__
 .git
 credentials.yml
 .cache
+.env
+.vscode

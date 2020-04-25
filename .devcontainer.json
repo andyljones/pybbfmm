@@ -1,8 +1,8 @@
 {
-    "image": "localhost:32000/drones",
+    "dockerFile": "docker/Dockerfile",
+    "context": "docker",
     "workspaceFolder": "/code",
     "workspaceMount": "source=/home/ajones/code/pybbfmm,target=/code,type=bind,consistency=cached",
-    "forwardPorts": [5000, 8083],
-    "postCreateCommand": "mkdir -p output && jupyter notebook --notebook-dir /code --no-browser --port=5000 --ip=0.0.0.0 --allow-root --NotebookApp.token=\"\" --NotebookApp.password=\"\" >output/jupyter.log 2>&1 &",
+    "forwardPorts": [5000, 8083], 
     "runArgs": ["--gpus", "all"]
 }
