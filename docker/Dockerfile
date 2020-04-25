@@ -11,6 +11,8 @@ RUN apt-get update && \
         curl ca-certificates bzip2 procps \ 
         # Needed for sanity
         neovim gdb wget man-db build-essential \
+        # libzmq as installed by nodejs seems to work with clang when it doesn't work with gcc
+        clang \
         # Needed for git installs
         git ssh-client \
         # Needed for nsight remotes
@@ -20,6 +22,7 @@ RUN apt-get update && \
         libswresample-dev libavfilter-dev && \
     # Set up tini
     chmod +x /usr/bin/tini
+ENV CC /usr/bin/clang
 
 # Set up git
 RUN git config --global user.name "Andrew Jones" && \
@@ -40,7 +43,7 @@ RUN conda install -y numpy pytorch torchvision pandas -c pytorch && \
     # Install Jupyter 7.5 because 7.6.1 has a bunch of lag with autoreload 
     pip install scipy numba psutil jupyter tqdm seaborn matplotlib wurlitzer ipython==7.5 flake8 && \
     # av>6.2 requires ffmpeg 4.0, which isn't available in ubuntu's default repos.
-    pip install av==6.2 \
+    pip install av==6.2
 
 # Install ijavascript
 RUN curl -sL https://deb.nodesource.com/setup_13.x | bash - && \
