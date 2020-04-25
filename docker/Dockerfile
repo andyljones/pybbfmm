@@ -82,6 +82,5 @@ ADD .ipython /root/.ipython
 
 # Set up the entrypoint script
 ADD run.sh /usr/bin/
-ENTRYPOINT ["tini", "--", "run.sh"] 
 
 WORKDIR /code
