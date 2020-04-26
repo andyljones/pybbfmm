@@ -64,7 +64,7 @@ OK, so, new rule:
 
 What's 'distant' and 'nearby' here? Well, the worst-case scenario is when a pixel is right next to a source. Then the field is really steep and we definitely want to calculate that contribution exactly. A source can be right next to a point if they are in the same cell, or if they're in neighbouring cells:
 
-`cell-neighbouring-cell`
+`point-close-to-source`
 
 So a more explicit rule is:
 
@@ -73,7 +73,7 @@ So a more explicit rule is:
 
 Trying it out, it's pretty good:
 
-`cell-groups-approx`
+`distant-cell-approx`
 
 In this particular example, rather than the original 10k contributions we're now calculating 2900 contributions from distant cells, and 900 contributions from nearby sources. That's a total of 3800 contributions to calculate, down 60% from the original approach!
 
