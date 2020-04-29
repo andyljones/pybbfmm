@@ -6,6 +6,7 @@ import scipy.ndimage
 import scipy.interpolate
 import pathlib
 from IPython.display import display, HTML
+from matplotlib.colors import LinearSegmentedColormap
 
 def viewport(charges, points, threshold=1e-1, eps=10):
     threshold = threshold*charges.max()
@@ -32,13 +33,14 @@ def plot(charges, center, scale, step, points, threshold=1e-1, res=1000):
 
     points, charges = points[visible], charges[visible]
 
-    fig, ax = plt.subplots()
+    dpi = plt.gcf().get_dpi()
+    fig = plt.figure(figsize=(res/dpi, res/dpi))
+    ax = plt.Axes(fig, [0, 0, 1, 1], frameon=False, xticks=[], yticks=[])
+    fig.add_axes(ax)
     ax.set_aspect(1)
-    ax.set_title(f'#{step}: {si_suffix((charges > threshold).sum())} infected')
+    ax.set_title(f'#{step}: {si_suffix((charges > threshold).sum())} infected', y=.95)
     ax.set_xticks([])
     ax.set_yticks([])
-
-    fig.set_size_inches(res/fig.get_dpi(), res/fig.get_dpi())
 
     xy = (res*(points - (center - scale))/(2*scale))
     ij = np.stack([res - xy[:, 1], xy[:, 0]], -1).astype(int).clip(0, res-1)
@@ -54,20 +56,22 @@ def plot(charges, center, scale, step, points, threshold=1e-1, res=1000):
 
     (l, b), (r, t) = center - scale, center + scale
     means = scipy.ndimage.gaussian_filter(means, .1/scale*res)
-    ax.imshow(means, extent=(l, r, b, t))
+
+    cmap = LinearSegmentedColormap.from_list('contagion', ['#F8F8F8', '#ff7f0e'])
+    fig.patch.set_facecolor('#F8F8F8')
+    ax.imshow(means, extent=(l, r, b, t), cmap=cmap)
     
     return fig
 
-def animate(infected, points, smoothing=4):
+def animate(infected, points, smoothing=4, N=0):
     print('Smoothing viewports...')
     centers, scales = interpolated_viewports(infected, points, smoothing)
     steps = (np.arange(len(centers))/smoothing).astype(int)
     repeated = [i for i in infected for _ in range(smoothing)]
     encoder = recording.parallel_encode(
                                 plot, repeated, centers, scales, steps, 
-                                points=points, N=0, fps=4*smoothing)
+                                points=points, N=N, fps=4*smoothing)
 
-    html, _ = recording.html_tag(encoder)
-    pathlib.Path('output/demo.html').write_text(html)
+    pathlib.Path('output/demo.mp4').write_bytes(encoder.value)
 
-    return display(HTML(html))
+    return display(HTML(recording.html_tag(encoder)[0]))
