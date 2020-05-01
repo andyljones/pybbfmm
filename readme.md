@@ -24,6 +24,33 @@ For the solver and the demo code,
 pip install --upgrade git+https://github.com/andyljones/pybbfmm#egg=pybbfmm[demo]
 ```
 
+## Usage
+```python
+from aljpy import arrdict
+import torch
+import pybbfmm
+
+prob = arrdict.arrdict(
+    # Specify the locations of the sources
+    sources=[[0., 0.]],
+    # Specify the charges
+    charges=[1.],
+    # Specify the locations of the targets
+    targets=[[1., 1.]])
+
+# Turn it into torch tensors
+prob = prob.map(torch.as_tensor)
+
+# Optional: ship it to the GPU
+# prob = prob.cuda()
+    
+# Define the kernel
+prob['kernel'] = lambda a, b: 1/((a - b)**2).sum(-1)
+
+# Solve!
+soln = pybbfmm.solve(prob)   # tensor([0.5000])
+```
+
 ## Notes
 * This represents a few weeks worth of work. There is a lot of performance still to wring out of the system. I think memory efficiency could probably be upped 2x-4x, and time efficiency 10x with a month or so of effort.
 * The main limitation for large problems is memory. With accuracy turned all the way down to `N=1` Chebyshev node per box, about 22m sources & targets can be fit on the 10GB of a RTX 2080 GPU.
