@@ -27,6 +27,7 @@ pip install --upgrade git+https://github.com/andyljones/pybbfmm#egg=pybbfmm[demo
 ## Notes
 * This represents a few weeks worth of work. There is a lot of performance still to wring out of the system. I think memory efficiency could probably be upped 2x-4x, and time efficiency 10x with a month or so of effort.
 * The main limitation for large problems is memory. With accuracy turned all the way down to `N=1` Chebyshev node per box, about 22m sources & targets can be fit on the 10GB of a RTX 2080 GPU.
+* There are various ways to get improvements in that 22m number - like swapping to using ints instead of longs - but the ultimate, scalable solution likely involves streaming parts of the tree to the GPU as needed.
 * While the code supports any number of dimensions, 3 and above dims will be _extremely_ slow. The location of the issue is obvious from profiling, but as 3D problems aren't my priority right now I've left it be. 
 * The code works just as well on the CPU, though slower. All that's needed is to drop the `.cuda()` call when forming your problem.
 * This is part of a larger project about writing a certain kind of epidemiological models as the sum of an n-body problem, a sparse matrix multiplication, and a finite-state machine.
