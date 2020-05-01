@@ -5,5 +5,6 @@
     "workspaceMount": "source=/home/ajones/code/pybbfmm,target=/code,type=bind,consistency=cached",
     "forwardPorts": [5000, 8083], 
     "runArgs": ["--gpus", "all"],
-    "postCreateCommand": ["run.sh"]
+    "overrideCommand": false,
+    "shutdownAction": "none",
 }
