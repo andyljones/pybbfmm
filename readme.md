@@ -42,7 +42,7 @@ prob = arrdict.arrdict(
 prob = prob.map(torch.as_tensor)
 
 # Optional: ship it to the GPU
-# prob = prob.cuda()
+# prob = prob.float().cuda()
     
 # Define the kernel
 prob['kernel'] = lambda a, b: 1/((a - b)**2).sum(-1)
