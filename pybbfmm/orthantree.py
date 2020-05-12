@@ -3,6 +3,7 @@ from . import sets, ragged
 from aljpy import arrdict
 
 def underoccupied(source_idxs, target_idxs, terminal, capacity):
+    """Figure out which boxes are oversubscribed and need to be further subdivided"""
     source_unique, source_counts = torch.unique(source_idxs, return_counts=True)
     target_unique, target_counts = torch.unique(target_idxs, return_counts=True)
 
@@ -15,7 +16,30 @@ def underoccupied(source_idxs, target_idxs, terminal, capacity):
 
 
 def orthantree(scaled, capacity=8):
-    #TODO: Well this is a travesty of incomprehensibility. Verify it then explain yourself.
+    """Construct a D-dimensional adaptively-refined quadtree/octtree/etc over the given problem.
+    Stop subdividing when each leaf box has at most `capacity` sources points and at most 
+    `capacity` target points in it.
+
+    This is a bit of a mess of a function, but long story short it starts with all the sources
+    allocated to the root and repeatedly subdivides overfull boxes. The boxes are represented
+    as an index, with the root being index 0. This means that you'll usually find the attribute 
+    of box `i` at index `i` of an array: parents[3] gives the index of the parent of `3`,
+    children[3] gives the children of `3`, etc etc.
+
+    Anyway, out of this function you get three datastructures.
+
+    tree: an arrdict describing the tree itself. Thinking of indexing into the arrays in this dict
+        as a map of sorts,
+            * `parents`: maps boxes to their parents
+            * `depths`: maps boxes to their depth in the tree
+            * `centers`: maps boxes to their physical center
+            * `terminal`: maps boxes to a boolean saying whether that box is a leaf
+            * `children`: maps boxes to a (2,)/(2, 2)/(2, 2, 2)/etc array of 2**D children
+            * `descent`: maps boxes to a (D,)-vector of what kind of child that box is, with elements from (-1, +1).
+    indices: an arrdict mapping sources and targets to the leaf box they lie in.
+    depths: a ragged array mapping each depth to the boxes at that depth.
+    
+    """
     D = scaled.sources.shape[1]
 
     points = torch.cat([scaled.sources, scaled.targets])
@@ -90,6 +114,13 @@ def child_boxes(tree, indices, descent):
     return tree.children[(indices, *subscripts.T)]
 
 def neighbour_boxes(tree, indices, directions):
+    """Finds the neighbour of `indices` in the tree in the given direction.
+
+    There's a non-vectorized (and easier to understand) version of this function 
+    here:
+
+    https://stackoverflow.com/questions/32412107/quadtree-find-neighbor/61211884#61211884
+    """
     #TODO: This can be framed as a recursive scheme and then as a dynamic programming scheme. 
     # Should save a factor of log(n)
     indices = torch.as_tensor(indices, dtype=tree.parents.dtype, device=tree.parents.device)
@@ -117,6 +148,10 @@ def neighbour_boxes(tree, indices, directions):
     return current
 
 def u_scheme(tree, neighbours):
+    """Metadata needed for calculating u-list interactions, as described in Carrier '88. 
+    
+    In brief, the u-list of a leaf is the set of neighbouring leaves. 
+    """
     unique_neighbours = torch.sort(neighbours, 1, descending=True).values
     unique_neighbours[:, 1:][unique_neighbours[:, 1:] == unique_neighbours[:, :-1]] = -1
 
@@ -130,7 +165,10 @@ def u_scheme(tree, neighbours):
     return ragged.from_pairs(pairs, len(tree.id), len(tree.id))
 
 def v_scheme(tree, depths, directions, neighbours):
-    """Children of the parent's colleagues that are separated from the box"""
+    """Metadata needed for calculating v-list interactions, as described in Carrier '88. 
+    
+    In brief, the v-list of a box is the children of the parent's colleagues that are 
+    separated from the box"""
     D = tree.children.ndim-1
     nonzero_directions = (directions != 0).any(-1)
     descents = sets.flat_cartesian_product(torch.tensor([-1, +1], device=tree.id.device), D)
@@ -159,8 +197,10 @@ def v_scheme(tree, depths, directions, neighbours):
     return result
 
 def w_pairs(tree, directions, neighbours):
-    """For childless boxes, descendents of colleagues whose parents are adjacent but
-    which aren't themselves"""
+    """Metadata needed for calculating v-list interactions, as described in Carrier '88. 
+    
+    In brief, the w-list of a leaf is the set of descendents of colleagues whose 
+    parents are adjacent but which aren't themselves"""
     D = tree.children.ndim-1
     bs = tree.terminal.nonzero().squeeze(1)
 
@@ -191,6 +231,18 @@ def w_pairs(tree, directions, neighbours):
     return pairs
 
 def interaction_scheme(tree, depths):
+    """Constructs the datastructures needed to calculate the interactions between boxes.
+    
+    See Carrier, Greengard & Rokhlin's 1988 paper for a description of u, v, w, and x 
+    interactions:
+
+    https://pdfs.semanticscholar.org/97f0/d2a31d818ede922c9a59dc17f710642332ca.pdf
+
+    §3.2, Notation, is what you're after, along with Fig 5.
+
+    The datastructures are pretty heterogeneous because, well, performance. They're set
+    up so the data needed can be got at fast without blowing up the memory budget.
+    """
     D = tree.children.ndim-1
     directions = sets.flat_cartesian_product(torch.tensor([-1, 0, +1], device=tree.id.device), D)
     neighbours = torch.stack([neighbour_boxes(tree, tree.id, d) for d in directions], -1)

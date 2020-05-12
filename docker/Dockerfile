@@ -85,4 +85,4 @@ ADD run.sh /usr/bin/
 
 WORKDIR /code
 
-ENTRYPOINT ['tini', '--', 'run.sh']
+ENTRYPOINT ["tini", "--", "run.sh"]

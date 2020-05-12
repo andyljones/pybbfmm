@@ -139,7 +139,6 @@ def presolve(prob, N=4):
         depths=depths)
 
 def evaluate(cheb, scaled, tree, scheme, indices, depths):
-
     W = weights(scaled, cheb, tree, indices)
 
     v = v_interactions(W, scaled, cheb, tree, scheme)
