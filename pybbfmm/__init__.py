@@ -36,7 +36,7 @@ def scale(prob):
         kernel=lambda a, b: prob.kernel(a*scale, b*scale))
 
 def weights(scaled, cheb, tree, indices):
-    """Calculates the :ref:`weights <solve>` used in a solution.
+    """Calculates the :ref:`weights <eval>` used in a solution.
 
     :param scaled: a :func:`scale`'d :ref:`problem <problem>`.
     :param cheb: a :class:`~pybbfmm.chebyshev.Chebyshev` object.
@@ -68,7 +68,7 @@ def node_locations(cheb, tree, indices):
     return cheb.nodes[None]/2**tree.depths[indices, None, None] + tree.centers[indices, None, :]
 
 def v_interactions(W, scaled, cheb, tree, scheme):
-    """Calculates the v-:ref:`interactions <solve>` used in a solution. 
+    """Calculates the v-:ref:`interactions <eval>` used in a solution. 
 
     :param W: the :func:`weights` for the solution.
     :param scaled: a :func:`scale`'d problem.
@@ -88,7 +88,7 @@ def v_interactions(W, scaled, cheb, tree, scheme):
     return ixns
 
 def x_interactions(scaled, cheb, tree, indices, scheme):
-    """Calculates the x-:ref:`interactions <solve>` used in a solution. 
+    """Calculates the x-:ref:`interactions <eval>` used in a solution. 
 
     :param scaled: a :func:`scale`'d problem.
     :param cheb: a :class:`~pybbfmm.chebyshev.Chebyshev` object.
@@ -113,7 +113,7 @@ def x_interactions(scaled, cheb, tree, indices, scheme):
     return ixns
 
 def w_interactions(W, scaled, cheb, tree, indices, scheme):
-    """Calculates the w-:ref:`interactions <solve>` used in a solution. 
+    """Calculates the w-:ref:`interactions <eval>` used in a solution. 
 
     :param W: the :func:`weights` for the solution.
     :param scaled: a :func:`scale`'d problem.
@@ -133,7 +133,7 @@ def w_interactions(W, scaled, cheb, tree, indices, scheme):
     return ixns
 
 def u_interactions(scaled, indices, scheme):
-    """Calculates the u-:ref:`interactions <solve>` used in a solution. 
+    """Calculates the u-:ref:`interactions <eval>` used in a solution. 
 
     :param scaled: a :func:`scale`'d problem.
     :param indices: an :ref:`indices <presolve>` dotdict.
@@ -155,7 +155,7 @@ def u_interactions(scaled, indices, scheme):
     return ixns
         
 def far_field(W, v, x, cheb, tree):
-    """Calculates the :ref:`far-field contributions <solve>` for each box.
+    """Calculates the :ref:`far-field contributions <eval>` for each box.
 
     :param W: the :func:`weights` for the solution.
     :param v: the :func:`v_interactions`.
@@ -178,7 +178,7 @@ def far_field(W, v, x, cheb, tree):
     return F
 
 def target_far_field(F, scaled, cheb, tree, indices, chunksize=int(1e6)):
-    """Calculates the :ref:`far-field contributions <solve>` for each target.
+    """Calculates the :ref:`far-field contributions <eval>` for each target.
 
     :param F: the :func:`far_field` contributions for each box.
     :param scaled: the :func:`scale'd` problem. 

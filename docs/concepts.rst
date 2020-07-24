@@ -21,18 +21,6 @@ A problem is a :ref:`dotdict <dotdicts>` that describes the problem you're tryin
 
 Presolve: trees, indices & schemes
 **********************************
-In brief, the u-list of a leaf is the set of neighbouring leaves. 
-
-In brief, the v-list of a box is the children of the parent's colleagues that are separated from the box
-
-In brief, the w-list of a leaf is the set of descendents of colleagues whose parents are adjacent but which aren't
-themselves
-
-See Carrier, Greengard & Rokhlin's 1988 paper for a description of u, v, w, and x interactions:
-
-https://pdfs.semanticscholar.org/97f0/d2a31d818ede922c9a59dc17f710642332ca.pdf
-
-§3.2, Notation, is what you're after, along with Fig 5.
 
 
 Tree
@@ -58,7 +46,19 @@ Depths
 A ragged array mapping each depth to the boxes at that depth.
     
  
-.. _solve:
+.. _eval:
 
-Solve: weights, interactions & contributions
-********************************************
+Evaluate: weights, interactions & contributions
+***********************************************
+In brief, the u-list of a leaf is the set of neighbouring leaves. 
+
+In brief, the v-list of a box is the children of the parent's colleagues that are separated from the box
+
+In brief, the w-list of a leaf is the set of descendents of colleagues whose parents are adjacent but which aren't
+themselves
+
+See Carrier, Greengard & Rokhlin's 1988 paper for a description of u, v, w, and x interactions:
+
+https://pdfs.semanticscholar.org/97f0/d2a31d818ede922c9a59dc17f710642332ca.pdf
+
+§3.2, Notation, is what you're after, along with Fig 5.
