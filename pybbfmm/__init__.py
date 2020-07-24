@@ -197,17 +197,18 @@ def target_far_field(F, scaled, cheb, tree, indices, chunksize=int(1e6)):
         potentials[i:i+chunksize] = (S*F[idx_chunk]).sum(-1)
     return potentials
 
-def presolve(prob, N=4):
+def presolve(prob, N=4, capacity=8):
     """Presolves a :ref:`problem <problem>`, returning a :ref:`dotdict <dotdicts>` full of information
     that can be used to :func:`evaluate` any problem with the same points and kernel.
 
     :param prob: the :ref:`problem <problem>` to presolve.
     :param N: the number of :class:`~megastep.chebyshev.Chebyshev` nodes to use.
+    :param capacity: the maximum number of sources or targets per box.
     :return: a dotdict full of :ref:`presolve <presolve>` data. 
     """
     cheb = chebyshev.Chebyshev(N, prob.sources.shape[1], device=prob.sources.device)
     scaled = scale(prob)
-    tree, indices, depths = orthantree.orthantree(scaled)
+    tree, indices, depths = orthantree.orthantree(scaled, capacity)
     scheme = orthantree.interaction_scheme(tree, depths)
     return aljpy.dotdict(
         cheb=cheb, 
