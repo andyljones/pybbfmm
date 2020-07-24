@@ -28,16 +28,18 @@ def orthantree(scaled, capacity=8):
 
     Anyway, out of this function you get three datastructures.
 
-    tree: an arrdict describing the tree itself. Thinking of indexing into the arrays in this dict
-        as a map of sorts,
-            * `parents`: maps boxes to their parents
-            * `depths`: maps boxes to their depth in the tree
-            * `centers`: maps boxes to their physical center
-            * `terminal`: maps boxes to a boolean saying whether that box is a leaf
-            * `children`: maps boxes to a (2,)/(2, 2)/(2, 2, 2)/etc array of 2**D children
-            * `descent`: maps boxes to a (D,)-vector of what kind of child that box is, with elements from (-1, +1).
-    indices: an arrdict mapping sources and targets to the leaf box they lie in.
-    depths: a ragged array mapping each depth to the boxes at that depth.
+    tree 
+        An arrdict describing the tree itself. Thinking of indexing into the arrays in this dict as a map of sorts,
+            * ``parents``: maps boxes to their parents
+            * ``depths``: maps boxes to their depth in the tree
+            * ``centers``: maps boxes to their physical center
+            * ``terminal``: maps boxes to a boolean saying whether that box is a leaf
+            * ``children``: maps boxes to a (2,)/(2, 2)/(2, 2, 2)/etc array of 2**D children
+            * ``descent``: maps boxes to a (D,)-vector of what kind of child that box is, with elements from (-1, +1).
+    indices
+        An arrdict mapping sources and targets to the leaf box they lie in.
+    depths
+        A ragged array mapping each depth to the boxes at that depth.
     
     """
     D = scaled.sources.shape[1]

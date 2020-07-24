@@ -18,7 +18,7 @@ print(sys.path)
 
 # -- Project information -----------------------------------------------------
 
-project = 'megastep'
+project = 'pybbfmm'
 copyright = '2020, Andy L. Jones'
 author = 'Andy L. Jones'
 
@@ -54,11 +54,11 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 html_theme = "alabaster"
 
 html_theme_options = {
-    'description': 'RL at 1m FPS',
+    'description': 'A GPU fast multipole method',
     'fixed_sidebar': True,
     'github_button': True,
     'github_user': 'andyljones',
-    'github_repo': 'megastep',
+    'github_repo': 'pybbfmm',
     'github_type': 'star',
     'github_count': False,
 }
@@ -80,17 +80,12 @@ html_style = 'custom.css'
 autoclass_content = 'both'
 autodoc_member_order = 'bysource'
 
-extlinks = {'github': ('https://github.com/andyljones/megastep/tree/master/%s', '')}
+extlinks = {'github': ('https://github.com/andyljones/pybbfmm/tree/master/%s', '')}
 
 def linkcode_resolve(domain, info):
     if domain != 'py':
         return None
     if not info['module']:
         return None
-
-    if info['module'].endswith('cuda'):
-        filename = 'megastep/src/wrappers.cpp'
-    else:
-        filename = info['module'].replace('.', '/') + '.py'
-
-    return f"https://github.com/andyljones/megastep/tree/master/{filename}"
+    filename = info['module'].replace('.', '/') + '.py'
+    return f"https://github.com/andyljones/pybbfmm/tree/master/{filename}"
