@@ -41,7 +41,7 @@ ENV PATH /opt/conda/bin:$PATH
 RUN conda install -y numpy pytorch torchvision pandas -c pytorch && \
     conda clean -ya && \
     # Install Jupyter 7.5 because 7.6.1 has a bunch of lag with autoreload 
-    pip install scipy numba psutil jupyter tqdm seaborn matplotlib wurlitzer ipython==7.5 flake8 && \
+    pip install scipy numba psutil jupyter tqdm seaborn matplotlib wurlitzer ipython==7.5 flake8 sphinx && \
     # av>6.2 requires ffmpeg 4.0, which isn't available in ubuntu's default repos.
     pip install av==6.2
 
@@ -83,6 +83,7 @@ ADD .ipython /root/.ipython
 # Set up the entrypoint script
 ADD run.sh /usr/bin/
 
+RUN mkdir -p /code
 WORKDIR /code
 
-ENTRYPOINT ['tini', '--', 'run.sh']
+ENTRYPOINT ["tini", "--", "run.sh"]

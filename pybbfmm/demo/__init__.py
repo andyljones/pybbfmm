@@ -38,7 +38,7 @@ def simulate(n=10e3, T=40, device='cpu'):
     print('Pass device="cuda" to run on the GPU. On Colab, you may need to enable it first under Edit->Notebook Settings.')
 
     print('Generating a population...')
-    np.random.seed(1)
+    np.random.seed(0)
     pop = population.points(n=n)
 
     # Phrase it as an n-body problem and stick it on the GPU

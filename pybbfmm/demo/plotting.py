@@ -4,6 +4,7 @@ from aljpy import recording
 from aljpy.plot import si_suffix
 import scipy.ndimage
 import scipy.interpolate
+import scipy as sp
 import pathlib
 from IPython.display import display, HTML
 from matplotlib.colors import LinearSegmentedColormap
@@ -28,7 +29,7 @@ def interpolated_viewports(infected, points, smoothing):
 
     return smooth_centers, smooth_scales
 
-def plot(charges, center, scale, step, points, threshold=1e-1, res=1000):
+def plot(charges, center, scale, step, points, threshold=1e-1, res=2000):
     visible = (points > center - scale).all(-1) & (points < center + scale).all(-1)
 
     points, charges = points[visible], charges[visible]
@@ -38,7 +39,7 @@ def plot(charges, center, scale, step, points, threshold=1e-1, res=1000):
     ax = plt.Axes(fig, [0, 0, 1, 1], frameon=False, xticks=[], yticks=[])
     fig.add_axes(ax)
     ax.set_aspect(1)
-    ax.set_title(f'#{step}: {si_suffix((charges > threshold).sum())} infected', y=.95)
+    ax.set_title(f'#{step}: {si_suffix((charges > threshold).sum())} infected', y=.95, fontdict={'fontsize': 24})
     ax.set_xticks([])
     ax.set_yticks([])
 
@@ -47,21 +48,26 @@ def plot(charges, center, scale, step, points, threshold=1e-1, res=1000):
 
     sums = np.zeros((res, res))
     np.add.at(sums, tuple(ij.T), charges)
+    sums = scipy.ndimage.gaussian_filter(sums, .1/scale*res)
 
     counts = np.zeros((res, res))
     np.add.at(counts, tuple(ij.T), np.ones_like(charges))
+    counts = scipy.ndimage.gaussian_filter(counts, .1/scale*res)
 
     means = np.full((res, res), 0.)
     np.divide(sums, counts, out=means, where=counts > 0)
 
     (l, b), (r, t) = center - scale, center + scale
-    means = scipy.ndimage.gaussian_filter(means, .1/scale*res)
 
     cmap = LinearSegmentedColormap.from_list('contagion', ['#F8F8F8', '#ff7f0e'])
     fig.patch.set_facecolor('#F8F8F8')
-    ax.imshow(means, extent=(l, r, b, t), cmap=cmap)
+    vmax = 10*sp.stats.norm(0, .1/scale*res).pdf(0)
+    ax.imshow(means, extent=(l, r, b, t), cmap=cmap, vmax=vmax)
     
-    return fig
+    arr = recording.array(fig)
+    plt.close(fig)
+
+    return arr
 
 def animate(infected, points, smoothing=4, N=0):
     print('Smoothing viewports...')
