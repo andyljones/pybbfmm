@@ -5,6 +5,11 @@ import torch
 EPS = 1e-2
 
 def limits(prob):
+    """Calculates the geometric limits to the problem
+
+    :param prob: a :ref:`problem <problem>`.
+    :return: A (2, D)-tensor of the maximum and minimum extents of the problem.
+    """
     points = torch.cat([prob.sources, prob.targets])
     lims = []
     # This madness is because max(dim=0) is 2000x slower than max()
@@ -14,6 +19,11 @@ def limits(prob):
     return torch.stack(lims, -1)
 
 def scale(prob):
+    """Scales a problem to lie in :math:`[-1, +1]^D`.
+
+    :param prob: a :ref:`problem <problem>`.
+    :return: a scaled :ref:`problem <problem>` with the ``limits`` and ``scale`` as additional keys.
+    """
     lims = limits(prob)
     mid = (lims[0] + lims[1])/2
     scale = (lims[1] - lims[0])/2
@@ -26,6 +36,14 @@ def scale(prob):
         kernel=lambda a, b: prob.kernel(a*scale, b*scale))
 
 def weights(scaled, cheb, tree, indices):
+    """Calculates the :ref:`weights <solve>` used in a solution.
+
+    :param scaled: a :func:`scale`'d :ref:`problem <problem>`.
+    :param cheb: a :class:`~pybbfmm.chebyshev.Chebyshev` object.
+    :param tree: a :ref:`tree <presolve>`.
+    :param indices: an :ref:`indices <presolve>` dotdict.
+    :return: a (n_boxes, n_cheb_coeffs:superscript:`dim`)-tensor of weights.
+    """
     leaves = tree.terminal.nonzero()
     box_to_source = ragged.invert_indices(indices.sources, len(tree.id))
     W = scaled.charges.new_zeros((len(tree.id), cheb.N**cheb.D))
@@ -50,6 +68,15 @@ def node_locations(cheb, tree, indices):
     return cheb.nodes[None]/2**tree.depths[indices, None, None] + tree.centers[indices, None, :]
 
 def v_interactions(W, scaled, cheb, tree, scheme):
+    """Calculates the v-:ref:`interactions <solve>` used in a solution. 
+
+    :param W: the :func:`weights` for the solution.
+    :param scaled: a :func:`scale`'d problem.
+    :param cheb: a :class:`~pybbfmm.chebyshev.Chebyshev` object.
+    :param tree: a :ref:`tree <presolve>`.
+    :param scheme: the :ref:`scheme <presolve>` for the solution.
+    :return: a (n_boxes, n_cheb_coeffs:superscript:`dim`)-tensor of interactions.
+    """
     ixns = torch.zeros_like(W) 
     for v in scheme.v:
         scale = 1/2**v.depth.float()
@@ -61,6 +88,15 @@ def v_interactions(W, scaled, cheb, tree, scheme):
     return ixns
 
 def x_interactions(scaled, cheb, tree, indices, scheme):
+    """Calculates the x-:ref:`interactions <solve>` used in a solution. 
+
+    :param scaled: a :func:`scale`'d problem.
+    :param cheb: a :class:`~pybbfmm.chebyshev.Chebyshev` object.
+    :param tree: a :ref:`tree <presolve>`.
+    :param indices: an :ref:`indices <presolve>` dotdict.
+    :param scheme: the :ref:`scheme <presolve>` for the solution.
+    :return: a (n_boxes, n_cheb_coeffs:superscript:`dim`)-tensor of interactions.
+    """
     box_to_source = ragged.invert_indices(indices.sources, len(tree.id))
 
     ixns = scaled.charges.new_zeros((len(tree.id), cheb.N**cheb.D))
@@ -77,6 +113,16 @@ def x_interactions(scaled, cheb, tree, indices, scheme):
     return ixns
 
 def w_interactions(W, scaled, cheb, tree, indices, scheme):
+    """Calculates the w-:ref:`interactions <solve>` used in a solution. 
+
+    :param W: the :func:`weights` for the solution.
+    :param scaled: a :func:`scale`'d problem.
+    :param cheb: a :class:`~pybbfmm.chebyshev.Chebyshev` object.
+    :param tree: a :ref:`tree <presolve>`.
+    :param indices: an :ref:`indices <presolve>` dotdict.
+    :param scheme: the :ref:`scheme <presolve>` for the solution.
+    :return: a (n_targets)-tensor of interactions.
+    """
     ixns = scaled.charges.new_zeros(len(scaled.targets))
     for p in range(scheme.w.max_k):
         partner, box_mask = scheme.w.kth(indices.targets, p)
@@ -87,6 +133,13 @@ def w_interactions(W, scaled, cheb, tree, indices, scheme):
     return ixns
 
 def u_interactions(scaled, indices, scheme):
+    """Calculates the u-:ref:`interactions <solve>` used in a solution. 
+
+    :param scaled: a :func:`scale`'d problem.
+    :param indices: an :ref:`indices <presolve>` dotdict.
+    :param scheme: the :ref:`scheme <presolve>` for the solution.
+    :return: a (n_targets)-tensor of interactions.
+    """
     box_to_source = ragged.invert_indices(indices.sources, scheme.u.range)
     target_idxs = torch.arange(len(scaled.targets), device=scaled.targets.device)
     ixns = scaled.charges.new_zeros(len(scaled.targets))
@@ -102,6 +155,15 @@ def u_interactions(scaled, indices, scheme):
     return ixns
         
 def far_field(W, v, x, cheb, tree):
+    """Calculates the :ref:`far-field contributions <solve>` for each box.
+
+    :param W: the :func:`weights` for the solution.
+    :param v: the :func:`v_interactions`.
+    :param x: the :func:`x_interactions`.
+    :param cheb: a :class:`~pybbfmm.chebyshev.Chebyshev` object.
+    :param tree: a :ref:`tree <presolve>`.
+    :return: a (n_boxes, n_cheb_coeffs:superscript:`dim`)-tensor of far-field contributions 
+    """
     F = torch.zeros_like(W)
     coeffs = cheb.downwards_coeffs()
     dot_dims = ((1,), (-1,))
@@ -116,7 +178,17 @@ def far_field(W, v, x, cheb, tree):
     return F
 
 def target_far_field(F, scaled, cheb, tree, indices, chunksize=int(1e6)):
+    """Calculates the :ref:`far-field contributions <solve>` for each target.
+
+    :param F: the :func:`far_field` contributions for each box.
+    :param scaled: the :func:`scale'd` problem. 
+    :param cheb: a :class:`~pybbfmm.chebyshev.Chebyshev` object.
+    :param tree: a :ref:`tree <presolve>`.
+    :param indices: an :ref:`indices <presolve>` dotdict.
+    :return: a (n_targets,)-tensor of far-field contributions.
+    """
     potentials = scaled.charges.new_zeros(len(scaled.targets))
+    # Chunk the far-field calculation to avoid blowing the memory limit
     for i in range(0, len(indices.targets), chunksize):
         idx_chunk = indices.targets[i:i+chunksize]
         tgt_chunk = scaled.targets[i:i+chunksize]
@@ -126,6 +198,13 @@ def target_far_field(F, scaled, cheb, tree, indices, chunksize=int(1e6)):
     return potentials
 
 def presolve(prob, N=4):
+    """Presolves a :ref:`problem <problem>`, returning a :ref:`dotdict <dotdicts>` full of information
+    that can be used to :func:`evaluate` any problem with the same points and kernel.
+
+    :param prob: the :ref:`problem <problem>` to presolve.
+    :param N: the number of :class:`~megastep.chebyshev.Chebyshev` nodes to use.
+    :return: a dotdict full of :ref:`presolve <presolve>` data. 
+    """
     cheb = chebyshev.Chebyshev(N, prob.sources.shape[1], device=prob.sources.device)
     scaled = scale(prob)
     tree, indices, depths = orthantree.orthantree(scaled)
@@ -139,6 +218,14 @@ def presolve(prob, N=4):
         depths=depths)
 
 def evaluate(cheb, scaled, tree, scheme, indices, depths):
+    """Evaluates a :ref:`problem <problem>` using :func:`presolve` data. This lets you do the expensive
+    part - the presolve - once for any configuration of points.
+
+    The arguments are as returned by :func:`presolve`. You can swap out the :func:`scale`'d problem to 
+    solve a different problem to the one you presolved.
+
+    :return: a (n_target,)-tensor of field intensities at the targets.
+    """
     W = weights(scaled, cheb, tree, indices)
 
     v = v_interactions(W, scaled, cheb, tree, scheme)
@@ -154,6 +241,12 @@ def evaluate(cheb, scaled, tree, scheme, indices, depths):
     return potential
 
 def solve(prob, N=4):
+    """Solves the given :ref:`problem <problem>`.
+
+    :param prob: the :ref:`problem <problem>` to solve.
+    :param N: the number of :class:`~megastep.chebyshev.Chebyshev` nodes to use.
+    :return: a (n_target,)-tensor of field intensities at the targets.
+    """
     presoln = presolve(prob, N)
     return evaluate(**presoln)
 

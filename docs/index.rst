@@ -8,6 +8,9 @@ community transmission problem in 4s per timestep.
 While optimized for 2D problems in the million-point-scale, the code supports problems with any number of dimensions,
 with arbitrary kernels defined entirely in Python.
 
+You can read an animated explanation of fast multipole methods `here
+<https://andyljones.com/posts/multipole-methods.html>`_.
+
 Demo
 ****
 
@@ -93,7 +96,10 @@ was the community transmission step, where each contagious person radiates a clo
 ways similar to how n-body simulations work, and yet I couldn't find anything in the epidemiological literature about
 accelerating community transmission calculations using fast multipole methods.
 
-I suspect this is because fast multipole methods are fairly tricky to implement, and at least using the traditional approach require a lot of careful analytical expansions. More recent research has introduced [black box fast multipole methods](https://mc.stanford.edu/cgi-bin/images/f/fa/Darve_bbfmm_2009.pdf) which let you accelerate n-body-esque simulations while excusing you from doing any hard math.
+I suspect this is because fast multipole methods are fairly tricky to implement, and at least using the traditional
+approach require a lot of careful analytical expansions. More recent research has introduced `black box fast
+multipole methods <https://mc.stanford.edu/cgi-bin/images/f/fa/Darve_bbfmm_2009.pdf>`_ which let you accelerate
+n-body-esque simulations while excusing you from doing any hard math.
 
 Resources
 *********
@@ -129,5 +135,6 @@ Index
 .. toctree::
     :maxdepth: 2
 
+    concepts
     reference
 

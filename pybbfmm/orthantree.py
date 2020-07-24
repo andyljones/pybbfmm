@@ -119,9 +119,7 @@ def neighbour_boxes(tree, indices, directions):
     """Finds the neighbour of `indices` in the tree in the given direction.
 
     There's a non-vectorized (and easier to understand) version of this function 
-    here:
-
-    https://stackoverflow.com/questions/32412107/quadtree-find-neighbor/61211884#61211884
+    `here <https://stackoverflow.com/questions/32412107/quadtree-find-neighbor/61211884#61211884>`_.
     """
     #TODO: This can be framed as a recursive scheme and then as a dynamic programming scheme. 
     # Should save a factor of log(n)

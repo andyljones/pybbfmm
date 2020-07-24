@@ -34,7 +34,9 @@ release = '0.1'
 extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.linkcode',
-    'sphinx.ext.extlinks'
+    'sphinx.ext.extlinks',
+    'sphinx.ext.intersphinx',
+    'sphinx.ext.mathjax'
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -89,3 +91,5 @@ def linkcode_resolve(domain, info):
         return None
     filename = info['module'].replace('.', '/') + '.py'
     return f"https://github.com/andyljones/pybbfmm/tree/master/{filename}"
+
+intersphinx_mapping = {'megastep': ('http://andyljones.com/megastep', None)}
