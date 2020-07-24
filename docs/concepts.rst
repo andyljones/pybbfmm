@@ -57,6 +57,12 @@ for a low-capacity, 1D problem::
 
     presolve(prob)
 
+Tree Construction
+==================
+There are two steps to the presolve. The first step is to build a tree over the sources and targets, which is done by
+:func:`~pybbfmm.orthantree.orthantree`. It returns three things: the tree, the indices and the depths. These 
+are described below. 
+
 Trees
 -----
 The most important bit of presolve information is the *tree*. The tree is the binary partition of space that's used 
@@ -96,15 +102,42 @@ property of the boxes:
 
 Indices
 -------
-An arrdict mapping sources and targets to the leaf box they lie in.
+While the tree arrdict itself gives the relationships between the boxes of the tree, it doesn't have any information 
+about how the sources and targets relate to the boxes. That's done by the second return from
+:func:`~pybbfmm.orthantree.orthantree`, ``indices``. This is a dotdict with two elements
+
+``sources``
+    A (n_source,)-tensor where the ``i`` th element gives which box the ``i`` th source is in
+
+``targets``
+    A (n_target,)-tensor where the ``i`` th element gives which box the ``i`` th target is in
 
 Depths
 ------
-A ragged array mapping each depth to the boxes at that depth.
+The third return from :func:`~pybbfmm.orthantree.orthantree` is ``depths``. This is a :class:`~pybbfmm.ragged.Ragged`
+that maps depths to the boxes at that level.
 
-Schemes
--------
-    
+Scheme Construction
+===================
+The second step in the presolve is to take all the information from the tree construction stage and use it to generate
+the *interaction lists*. The interaction lists describe which boxes, sources and targets interact with which other boxes,
+sources and targets.
+
+Keeping actual lists of all the pairs of interacting entities is memory-inefficient, so instead what's generated at 
+this step is enough information to be able to rapidly construct the interacting-entity lists on demand. This 
+information is - for the purposes of this library - called the *scheme* for the list. There are four lists, so there
+are four schemes.
+
+The four interaction lists come from [#Carrier88]_. The most useful parts of the paper are §3.2, Notation, along with
+Fig 5.
+
+    * ``u``: the u-list of a leaf box is the set of neighbouring leaf boxes. 
+    * ``v``: the v-list of a box is the children of the parent's colleagues that are separated from the box.
+    * ``w``: the w-list of a leaf is the set of descendents of colleagues whose parents are adjacent but which aren't
+        adjacent themselves
+    * ``x``: the x-list of a box is set of all boxes for which this box turns up in the other box's ``w`` list. 
+
+Believe you me: understanding these is much easier once you've read §3.2 and had a hard look at Fig 5. 
  
 .. _eval:
 
@@ -112,23 +145,14 @@ Evaluate: weights, interactions & contributions
 ***********************************************
 
 Weights
--------
+=======
 
 Interactions
-------------
+============
 
 Contributions
--------------
+=============
 
-In brief, the u-list of a leaf is the set of neighbouring leaves. 
+.. rubric:: Footnotes
 
-In brief, the v-list of a box is the children of the parent's colleagues that are separated from the box
-
-In brief, the w-list of a leaf is the set of descendents of colleagues whose parents are adjacent but which aren't
-themselves
-
-See Carrier, Greengard & Rokhlin's 1988 paper for a description of u, v, w, and x interactions:
-
-https://pdfs.semanticscholar.org/97f0/d2a31d818ede922c9a59dc17f710642332ca.pdf
-
-§3.2, Notation, is what you're after, along with Fig 5.
+.. [#Carrier88] `Carrier, Greengard & Rokhlin 1988, A Fast Adaptive Multipole Algorithm for Particle Simulations <https://pdfs.semanticscholar.org/97f0/d2a31d818ede922c9a59dc17f710642332ca.pdf>`_
