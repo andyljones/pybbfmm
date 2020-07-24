@@ -19,7 +19,7 @@ def orthantree(scaled, capacity=8):
     """Constructs a :ref:`tree <presolve>` for the given :func:`~pybbfmm.scale`'d problem.
 
     This is a bit of a mess of a function, but long story short it starts with all the sources allocated to the root
-    and repeatedly subdivides overfull boxes.
+    and repeatedly subdivides overfull boxes, constructing the various tree tensors as it goes.
 
     :param scaled: :func:`~pybbfmm.scale`'d problem.
     :param capacity: the max number of sources or targets per box.
@@ -132,7 +132,6 @@ def neighbour_boxes(tree, indices, directions):
 
 def u_scheme(tree, neighbours):
     """Metadata needed for calculating u-:ref:`interactions <presolve>`.
-    
     """
     unique_neighbours = torch.sort(neighbours, 1, descending=True).values
     unique_neighbours[:, 1:][unique_neighbours[:, 1:] == unique_neighbours[:, :-1]] = -1
@@ -147,7 +146,7 @@ def u_scheme(tree, neighbours):
     return ragged.from_pairs(pairs, len(tree.id), len(tree.id))
 
 def v_scheme(tree, depths, directions, neighbours):
-    """Metadata needed for calculating v-list interactions, as described in Carrier '88. 
+    """Metadata needed for calculating v-:ref:`interactions <presolve>`.
     """
     D = tree.children.ndim-1
     nonzero_directions = (directions != 0).any(-1)
@@ -177,7 +176,7 @@ def v_scheme(tree, depths, directions, neighbours):
     return result
 
 def w_pairs(tree, directions, neighbours):
-    """Metadata needed for calculating v-list interactions, as described in Carrier '88. 
+    """Metadata needed for calculating w-:ref:`interactions <presolve>`.
     """
     D = tree.children.ndim-1
     bs = tree.terminal.nonzero().squeeze(1)
@@ -209,10 +208,14 @@ def w_pairs(tree, directions, neighbours):
     return pairs
 
 def interaction_scheme(tree, depths):
-    """Constructs the datastructures needed to calculate the interactions between boxes.
+    """Returns the datastructures needed to calculate the :ref:`interactions <presolve>` between boxes.
     
     The datastructures are pretty heterogeneous because, well, performance. They're set
     up so the data needed can be got at fast without blowing up the memory budget.
+
+    :param tree: a :ref:`tree <presolve>`.
+    :param depths: the :ref:`depths <presolve>` to go with the tree.
+    :return: a :ref:`scheme <presolve>`.
     """
     D = tree.children.ndim-1
     directions = sets.flat_cartesian_product(torch.tensor([-1, 0, +1], device=tree.id.device), D)
