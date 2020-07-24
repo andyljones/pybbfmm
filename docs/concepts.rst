@@ -18,13 +18,13 @@ Problems
 A problem is a :ref:`dotdict <dotdicts>` that describes the problem you're trying to solve. A problem dotdict has 
 keys 
 
-sources
+``sources``
     A (n_sources, D)-tensor giving the D-dimensional locations of the source charges.
-targets
+``targets``
     A (n_targets, D)-tensor giving the D-dimensional locations of the target points you want to evaluate the field at.
-charges
+``charges``
     A (n_sources,)-tensor giving the 'charge' at each source point. 
-kernel
+``kernel``
     A function that takes a tensor of source locations and a tensor of target locations and returns the strength of the 
     sources' fields at the target points. For example, an inverse-square law uses a kernel ::
 
@@ -60,7 +60,10 @@ for a low-capacity, 1D problem::
 Trees
 -----
 The most important bit of presolve information is the *tree*. The tree is the binary partition of space that's used 
-to figure out which sources it's okay to approximate when calculating which points.
+to figure out which sources it's okay to approximate when calculating which points. It's usually constructed by 
+:func:`~pybbfmm.orthantree.orthantree` and looks something like this
+
+TODO: imagery of a tree
 
 The internal nodes of the tree are called *boxes*. The boxes are represented as an index, with the root being index 0. 
 This means that you'll usually find the attribute of box ``i`` at index ``i`` of a tensor: ``parents[3]`` gives the
@@ -73,7 +76,7 @@ property of the boxes:
     Give the boxes' ID, which is just... its index. Useful to have around, not actually informative.
 
 ``parents``
-    Gives the boxes' parents. The ``i`` th element is the index of box ``i``s parent.
+    Gives the boxes' parents. The ``i`` th element is the index of box ``i`` s parent.
 
 ``depths``
     Gives the boxes' depth in the tree. The ``i`` th element is the depth of box ``i``, with zero corresponding to the root.
@@ -88,7 +91,7 @@ property of the boxes:
     Gives the boxes' children. The ``i``th element is an (2,)/(2, 2)/(2, 2, 2)/etc-tensor of the 2 :sup:`D` children of box ``i``.
 
 ``descent``
-    Gives the boxes' descent: whether it's a left-child or a right-child, etc etc. Practically this means the ``i``th
+    Gives the boxes' descent: whether it's a left-child or a right-child, etc etc. Practically this means the ``i`` th
     element is a (D,)-vector of (-1, +1)'s, with the value indicating which side of the parent's center the box is on.
 
 Indices
