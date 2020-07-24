@@ -21,7 +21,8 @@ orthantree
 ragged
 ******
 .. automodule:: pybbfmm.ragged
-    :members:
+    :members: Ragged
+    :undoc-members:
 
 sets
 ****
