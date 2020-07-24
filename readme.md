@@ -64,5 +64,10 @@ This grew out of some exploratory work on replicating [Ferguson et al's non-phar
 
 I suspect this is because fast multipole methods are fairly tricky to implement, and at least using the traditional approach require a lot of careful analytical expansions. More recent research has introduced [black box fast multipole methods](https://mc.stanford.edu/cgi-bin/images/f/fa/Darve_bbfmm_2009.pdf) which let you accelerate n-body-esque simulations while excusing you from doing any hard math.
 
+## Resources
+* [William & Fong's original paper](https://mc.stanford.edu/cgi-bin/images/f/fa/Darve_bbfmm_2009.pdf) on the black-box fast multipole method is the best place to start.
+* [Carrier, Greengard & Rokhlin's original paper](https://pdfs.semanticscholar.org/97f0/d2a31d818ede922c9a59dc17f710642332ca.pdf) on the fast multipole method is still the best resource on implementing dynamic trees. Their notation is used extensively in the `orthantree` module.
+* I've [made an animated explanation of the fast multipole method](https://andyljones.com/posts/multipole-methods.html) to go with this library.
+
 ## Alternatives
 There are a [couple](https://github.com/sivaramambikasaran/BBFMM2D) of [Python](https://github.com/DrFahdSiddiqui/bbFMM2D-Python) implementations [around](https://github.com/ruoxi-wang/PBBFMM3D), but none of them are easy to use or modify.
