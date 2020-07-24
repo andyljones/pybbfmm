@@ -24,9 +24,37 @@ For the solver and the demo code,
 pip install --upgrade git+https://github.com/andyljones/pybbfmm#egg=pybbfmm[demo]
 ```
 
+## Usage
+```python
+from aljpy import arrdict
+import torch
+import pybbfmm
+
+prob = arrdict.arrdict(
+    # Specify the locations of the sources
+    sources=[[0., 0.]],
+    # Specify the charges
+    charges=[1.],
+    # Specify the locations of the targets
+    targets=[[1., 1.]])
+
+# Turn it into torch tensors
+prob = prob.map(torch.as_tensor)
+
+# Optional: ship it to the GPU
+# prob = prob.float().cuda()
+    
+# Define the kernel
+prob['kernel'] = lambda a, b: 1/((a - b)**2).sum(-1)
+
+# Solve!
+soln = pybbfmm.solve(prob)   # tensor([0.5000])
+```
+
 ## Notes
 * This represents a few weeks worth of work. There is a lot of performance still to wring out of the system. I think memory efficiency could probably be upped 2x-4x, and time efficiency 10x with a month or so of effort.
 * The main limitation for large problems is memory. With accuracy turned all the way down to `N=1` Chebyshev node per box, about 22m sources & targets can be fit on the 10GB of a RTX 2080 GPU.
+* There are various ways to get improvements in that 22m number - like swapping to using ints instead of longs - but the ultimate, scalable solution likely involves streaming parts of the tree to the GPU as needed.
 * While the code supports any number of dimensions, 3 and above dims will be _extremely_ slow. The location of the issue is obvious from profiling, but as 3D problems aren't my priority right now I've left it be. 
 * The code works just as well on the CPU, though slower. All that's needed is to drop the `.cuda()` call when forming your problem.
 * This is part of a larger project about writing a certain kind of epidemiological models as the sum of an n-body problem, a sparse matrix multiplication, and a finite-state machine.
@@ -35,6 +63,11 @@ pip install --upgrade git+https://github.com/andyljones/pybbfmm#egg=pybbfmm[demo
 This grew out of some exploratory work on replicating [Ferguson et al's non-pharmaceutical intervention report](https://www.imperial.ac.uk/media/imperial-college/medicine/sph/ide/gida-fellowships/Imperial-College-COVID19-NPI-modelling-16-03-2020.pdf). I found that the slow part of the [underlying spatiotemporal model](https://static-content.springer.com/esm/art%3A10.1038%2Fnature04795/MediaObjects/41586_2006_BFnature04795_MOESM28_ESM.pdf) was the community transmission step, where each contagious person radiates a cloud of infectiousness. This is in many ways similar to how n-body simulations work, and yet I couldn't find anything in the epidemiological literature about accelerating community transmission calculations using fast multipole methods.
 
 I suspect this is because fast multipole methods are fairly tricky to implement, and at least using the traditional approach require a lot of careful analytical expansions. More recent research has introduced [black box fast multipole methods](https://mc.stanford.edu/cgi-bin/images/f/fa/Darve_bbfmm_2009.pdf) which let you accelerate n-body-esque simulations while excusing you from doing any hard math.
+
+## Resources
+* [William & Fong's original paper](https://mc.stanford.edu/cgi-bin/images/f/fa/Darve_bbfmm_2009.pdf) on the black-box fast multipole method is the best place to start.
+* [Carrier, Greengard & Rokhlin's original paper](https://pdfs.semanticscholar.org/97f0/d2a31d818ede922c9a59dc17f710642332ca.pdf) on the fast multipole method is still the best resource on implementing dynamic trees. Their notation is used extensively in the `orthantree` module.
+* I've [made an animated explanation of the fast multipole method](https://andyljones.com/posts/multipole-methods.html) to go with this library.
 
 ## Alternatives
 There are a [couple](https://github.com/sivaramambikasaran/BBFMM2D) of [Python](https://github.com/DrFahdSiddiqui/bbFMM2D-Python) implementations [around](https://github.com/ruoxi-wang/PBBFMM3D), but none of them are easy to use or modify.

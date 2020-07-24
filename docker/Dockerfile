@@ -86,4 +86,8 @@ ADD run.sh /usr/bin/
 RUN mkdir -p /code
 WORKDIR /code
 
+<<<<<<< HEAD
 ENTRYPOINT ["tini", "--", "run.sh"]
+=======
+ENTRYPOINT ["tini", "--", "run.sh"]
+>>>>>>> c3ed8119e63c4ec0f42709145a55d6164f622608

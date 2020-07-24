@@ -28,8 +28,8 @@ def v_w_problem():
     ).cuda()
 
 
-def solve(prob, kernel=quad_kernel):
-    k = kernel(prob.targets[:, None], prob.sources[None, :])
+def solve(prob):
+    k = prob.kernel(prob.targets[:, None], prob.sources[None, :])
     return (k*prob.charges).sum(-1)
 
 REPORT_MEMORY = []
