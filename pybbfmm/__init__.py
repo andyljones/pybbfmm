@@ -42,7 +42,7 @@ def weights(scaled, cheb, tree, indices):
     :param cheb: a :class:`~pybbfmm.chebyshev.Chebyshev` object.
     :param tree: a :ref:`tree <presolve>`.
     :param indices: an :ref:`indices <presolve>` dotdict.
-    :return: a (n_boxes, n_cheb_coeffs:superscript:`dim`)-tensor of weights.
+    :return: a (n_boxes, n_cheb_coeffs :sup:`dim`)-tensor of weights.
     """
     leaves = tree.terminal.nonzero()
     box_to_source = ragged.invert_indices(indices.sources, len(tree.id))
@@ -75,7 +75,7 @@ def v_interactions(W, scaled, cheb, tree, scheme):
     :param cheb: a :class:`~pybbfmm.chebyshev.Chebyshev` object.
     :param tree: a :ref:`tree <presolve>`.
     :param scheme: the :ref:`scheme <presolve>` for the solution.
-    :return: a (n_boxes, n_cheb_coeffs:superscript:`dim`)-tensor of interactions.
+    :return: a (n_boxes, n_cheb_coeffs :sup:`dim`)-tensor of interactions.
     """
     ixns = torch.zeros_like(W) 
     for v in scheme.v:
@@ -95,7 +95,7 @@ def x_interactions(scaled, cheb, tree, indices, scheme):
     :param tree: a :ref:`tree <presolve>`.
     :param indices: an :ref:`indices <presolve>` dotdict.
     :param scheme: the :ref:`scheme <presolve>` for the solution.
-    :return: a (n_boxes, n_cheb_coeffs:superscript:`dim`)-tensor of interactions.
+    :return: a (n_boxes, n_cheb_coeffs :sup:`dim`)-tensor of interactions.
     """
     box_to_source = ragged.invert_indices(indices.sources, len(tree.id))
 
@@ -162,7 +162,7 @@ def far_field(W, v, x, cheb, tree):
     :param x: the :func:`x_interactions`.
     :param cheb: a :class:`~pybbfmm.chebyshev.Chebyshev` object.
     :param tree: a :ref:`tree <presolve>`.
-    :return: a (n_boxes, n_cheb_coeffs:superscript:`dim`)-tensor of far-field contributions 
+    :return: a (n_boxes, n_cheb_coeffs :sup:`dim`)-tensor of far-field contributions 
     """
     F = torch.zeros_like(W)
     coeffs = cheb.downwards_coeffs()

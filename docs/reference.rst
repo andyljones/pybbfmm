@@ -10,12 +10,8 @@ pybbfmm
 chebyshev
 *********
 .. automodule:: pybbfmm.chebyshev
-<<<<<<< Updated upstream
-    :members:
-=======
     :members: Chebyshev
     :undoc-members:
->>>>>>> Stashed changes
 
 orthantree
 **********

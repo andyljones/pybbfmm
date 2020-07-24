@@ -3,7 +3,7 @@ from . import sets, ragged
 from aljpy import arrdict
 
 def underoccupied(source_idxs, target_idxs, terminal, capacity):
-    """Figure out which boxes are oversubscribed and need to be further subdivided"""
+    # Figure out which boxes are oversubscribed and need to be further subdivided
     source_unique, source_counts = torch.unique(source_idxs, return_counts=True)
     target_unique, target_counts = torch.unique(target_idxs, return_counts=True)
 
@@ -16,31 +16,14 @@ def underoccupied(source_idxs, target_idxs, terminal, capacity):
 
 
 def orthantree(scaled, capacity=8):
-    """Construct a D-dimensional adaptively-refined quadtree/octtree/etc over the given problem.
-    Stop subdividing when each leaf box has at most `capacity` sources points and at most 
-    `capacity` target points in it.
+    """Constructs a :ref:`tree <presolve>` for the given :func:`~pybbfmm.scale`'d problem.
 
-    This is a bit of a mess of a function, but long story short it starts with all the sources
-    allocated to the root and repeatedly subdivides overfull boxes. The boxes are represented
-    as an index, with the root being index 0. This means that you'll usually find the attribute 
-    of box `i` at index `i` of an array: parents[3] gives the index of the parent of `3`,
-    children[3] gives the children of `3`, etc etc.
+    This is a bit of a mess of a function, but long story short it starts with all the sources allocated to the root
+    and repeatedly subdivides overfull boxes.
 
-    Anyway, out of this function you get three datastructures.
-
-    tree 
-        An arrdict describing the tree itself. Thinking of indexing into the arrays in this dict as a map of sorts,
-            * ``parents``: maps boxes to their parents
-            * ``depths``: maps boxes to their depth in the tree
-            * ``centers``: maps boxes to their physical center
-            * ``terminal``: maps boxes to a boolean saying whether that box is a leaf
-            * ``children``: maps boxes to a (2,)/(2, 2)/(2, 2, 2)/etc array of 2**D children
-            * ``descent``: maps boxes to a (D,)-vector of what kind of child that box is, with elements from (-1, +1).
-    indices
-        An arrdict mapping sources and targets to the leaf box they lie in.
-    depths
-        A ragged array mapping each depth to the boxes at that depth.
-    
+    :param scaled: :func:`~pybbfmm.scale`'d problem.
+    :param capacity: the max number of sources or targets per box.
+    :return: A :ref:`tree <presolve>`.
     """
     D = scaled.sources.shape[1]
 
@@ -148,9 +131,8 @@ def neighbour_boxes(tree, indices, directions):
     return current
 
 def u_scheme(tree, neighbours):
-    """Metadata needed for calculating u-list interactions, as described in Carrier '88. 
+    """Metadata needed for calculating u-:ref:`interactions <presolve>`.
     
-    In brief, the u-list of a leaf is the set of neighbouring leaves. 
     """
     unique_neighbours = torch.sort(neighbours, 1, descending=True).values
     unique_neighbours[:, 1:][unique_neighbours[:, 1:] == unique_neighbours[:, :-1]] = -1
@@ -166,9 +148,7 @@ def u_scheme(tree, neighbours):
 
 def v_scheme(tree, depths, directions, neighbours):
     """Metadata needed for calculating v-list interactions, as described in Carrier '88. 
-    
-    In brief, the v-list of a box is the children of the parent's colleagues that are 
-    separated from the box"""
+    """
     D = tree.children.ndim-1
     nonzero_directions = (directions != 0).any(-1)
     descents = sets.flat_cartesian_product(torch.tensor([-1, +1], device=tree.id.device), D)
@@ -198,9 +178,7 @@ def v_scheme(tree, depths, directions, neighbours):
 
 def w_pairs(tree, directions, neighbours):
     """Metadata needed for calculating v-list interactions, as described in Carrier '88. 
-    
-    In brief, the w-list of a leaf is the set of descendents of colleagues whose 
-    parents are adjacent but which aren't themselves"""
+    """
     D = tree.children.ndim-1
     bs = tree.terminal.nonzero().squeeze(1)
 
@@ -233,13 +211,6 @@ def w_pairs(tree, directions, neighbours):
 def interaction_scheme(tree, depths):
     """Constructs the datastructures needed to calculate the interactions between boxes.
     
-    See Carrier, Greengard & Rokhlin's 1988 paper for a description of u, v, w, and x 
-    interactions:
-
-    https://pdfs.semanticscholar.org/97f0/d2a31d818ede922c9a59dc17f710642332ca.pdf
-
-    §3.2, Notation, is what you're after, along with Fig 5.
-
     The datastructures are pretty heterogeneous because, well, performance. They're set
     up so the data needed can be got at fast without blowing up the memory budget.
     """
@@ -254,68 +225,3 @@ def interaction_scheme(tree, depths):
         x=ragged.from_pairs(w.flip((1,)), len(tree.id), len(tree.id)),
         u=u_scheme(tree, neighbours),
         v=v_scheme(tree, depths, directions, neighbours))
-
-## TEST
-
-def y_pairs(tree, b):
-    """Everything well-separated from the parent
-    
-    This isn't used in production, it's just for debugging. It should equal the compliment of the other lists"""
-    D = tree.children.ndim-1
-    ds = sets.flat_cartesian_product(torch.tensor([-1, 0, +1], device=tree.id.device), D)
-
-    colleagues = torch.cat([neighbour_boxes(tree, tree.parents[[b]], d) for d in ds])
-
-    # A leaf is well-separated from b's parent if it's not a descendent of the colleagues.
-    descendents = [colleagues]
-    while descendents[-1].nelement():
-        children = tree.children[descendents[-1]]
-        parents = children[children >= 0]
-        descendents.append(parents)
-    descendents = torch.cat(descendents)
-    leaves = tree.terminal.nonzero().squeeze(1)
-    ys = leaves[~(leaves[:, None] == descendents[None, :]).any(-1)]
-    return ys
-
-def ancestor_interactions(tree, lists, b):
-    import pandas as pd
-
-    ancestors = [torch.as_tensor([b], device=tree.id.device)]
-    while ancestors[-1].nelement():
-        parents = tree.parents[ancestors[-1]]
-        ancestors.append(parents[parents >= 0])
-    ancestors = torch.cat(ancestors)
-
-    ixns = []
-    for height, ancestor in enumerate(ancestors):
-        for k, l in lists.items():
-            kl_ixns = l[:, 1][l[:, 0] == ancestor]
-            for ixn in kl_ixns:
-                ixns.append((height, int(ancestor), k, int(ixn)))
-    return pd.DataFrame(ixns, columns=['height', 'ancestor', 'list', 'partner'])
-
-def terminal_descendents(tree, bs):
-    bs = torch.as_tensor(bs, device=tree.id.device) 
-
-    terminal = [bs[tree.terminal[bs]]]
-    parents = bs[~tree.terminal[bs]]
-    while parents.nelement():
-        children = tree.children[parents].flatten()
-        parents = children[(children >= 0) & ~tree.terminal[children]]
-        terminal.append(children[(children >= 0) & tree.terminal[children]])
-    return torch.cat(terminal)
-
-def test_lists(tree):
-    # Generate a random problem
-    # Get the tree
-    # Get the lists
-    # Check that the partners of each box and its ancestors partition the grid
-    scheme = interaction_scheme(tree)
-    bs = tree.terminal.nonzero().squeeze()
-    for b in bs:
-        print(f'Checking {b}')
-        ixns = ancestor_interactions(tree, scheme.lists, b)
-        terminal = terminal_descendents(tree, ixns.partner.values)
-
-        assert ixns.partner.value_counts().max() <= 1
-        assert tree.terminal.sum() == len(terminal)

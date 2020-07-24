@@ -12,11 +12,8 @@ class Chebyshev:
 
     @property
     def nodes(self):
-<<<<<<< Updated upstream
-=======
-        """A cached copy of the locations of the Chebyshev nodes, given as a (N:superscript:`D`, D)-tensor.
+        """A cached copy of the locations of the Chebyshev nodes, given as a (N :sup:`D`, D)-tensor.
         """
->>>>>>> Stashed changes
         if self._nodes is None:
             ms = torch.arange(self.N, device=self.device)
             onedim = torch.cos((ms+1/2)*np.pi/self.N)
@@ -24,15 +21,6 @@ class Chebyshev:
         return self._nodes
 
     def similarity(self, a, b):
-<<<<<<< Updated upstream
-        """
-        Args:
-            a: ms + (d,)
-            b: ns + (d,)
-        
-        Returns:
-            ms + ns
-=======
         """Calculates the Chebyshev 'similarity' between each pair of two sets of points. 
 
         Don't know if it's called similarity anywhere else, but it's the matrix of weights that lets you go from 
@@ -41,7 +29,6 @@ class Chebyshev:
         :param a: a (\\*ms, d)-tensor of points
         :param b: a (\\*ns, d)-tensor of points
         :return: a (\\*ms, \\*ns)-tensor of similarities between ``a`` and ``b``'s points.
->>>>>>> Stashed changes
         """
         assert ((-1 <= a) & (a <= +1)).all()
         assert ((-1 <= b) & (b <= +1)).all()
