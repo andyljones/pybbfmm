@@ -131,7 +131,7 @@ def neighbour_boxes(tree, indices, directions):
     return current
 
 def u_scheme(tree, neighbours):
-    """Metadata needed for calculating u-:ref:`interactions <presolve>`.
+    """Calculates the u-:ref:`scheme <presolve>`.
     """
     unique_neighbours = torch.sort(neighbours, 1, descending=True).values
     unique_neighbours[:, 1:][unique_neighbours[:, 1:] == unique_neighbours[:, :-1]] = -1
@@ -146,7 +146,7 @@ def u_scheme(tree, neighbours):
     return ragged.from_pairs(pairs, len(tree.id), len(tree.id))
 
 def v_scheme(tree, depths, directions, neighbours):
-    """Metadata needed for calculating v-:ref:`interactions <presolve>`.
+    """Calculates the v-:ref:`scheme <presolve>`.
     """
     D = tree.children.ndim-1
     nonzero_directions = (directions != 0).any(-1)
@@ -176,7 +176,7 @@ def v_scheme(tree, depths, directions, neighbours):
     return result
 
 def w_pairs(tree, directions, neighbours):
-    """Metadata needed for calculating w-:ref:`interactions <presolve>`.
+    """Metadata needed for calculating w- and x-:ref:`scheme <presolve>`.
     """
     D = tree.children.ndim-1
     bs = tree.terminal.nonzero().squeeze(1)

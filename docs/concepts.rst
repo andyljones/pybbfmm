@@ -22,9 +22,8 @@ A problem is a :ref:`dotdict <dotdicts>` that describes the problem you're tryin
 Presolve: trees, indices & schemes
 **********************************
 
-
-Tree
-----
+Trees
+-----
 An arrdict describing the tree itself. Thinking of indexing into the arrays in this dict as a map of sorts,
     * ``parents``: maps boxes to their parents
     * ``depths``: maps boxes to their depth in the tree
@@ -44,12 +43,25 @@ An arrdict mapping sources and targets to the leaf box they lie in.
 Depths
 ------
 A ragged array mapping each depth to the boxes at that depth.
+
+Schemes
+-------
     
  
 .. _eval:
 
 Evaluate: weights, interactions & contributions
 ***********************************************
+
+Weights
+-------
+
+Interactions
+------------
+
+Contributions
+-------------
+
 In brief, the u-list of a leaf is the set of neighbouring leaves. 
 
 In brief, the v-list of a box is the children of the parent's colleagues that are separated from the box
