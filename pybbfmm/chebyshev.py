@@ -5,6 +5,14 @@ from . import sets
 class Chebyshev:
     
     def __init__(self, N, D, device=None):
+        """Helps with Chebyshev interpolation.
+
+        Interpolation is assumed to happen on :math:`[-1, +1]^D`.
+        
+        :param N: the number of Chebyshev nodes along each dimension.
+        :param D: the number of dimensions
+        :param device: the device to cache things on. Typically ``'cuda'``.
+        """
         self.N = N
         self.D = D
         self._nodes = None
@@ -12,7 +20,7 @@ class Chebyshev:
 
     @property
     def nodes(self):
-        """A cached copy of the locations of the Chebyshev nodes, given as a (N :sup:`D`, D)-tensor.
+        """A cached copy of the locations of the Chebyshev nodes, given as a (N:superscript:`D`, D)-tensor.
         """
         if self._nodes is None:
             ms = torch.arange(self.N, device=self.device)
@@ -43,19 +51,30 @@ class Chebyshev:
         terms = torch.cos(ks*theta_a)*torch.cos(ks*theta_b)
         return (1/self.N + 2/self.N*terms.sum(-1)).prod(-1)
 
-    def interpolate(self, x, v):
-        return (self.similarity(x, self.nodes)*v).sum(-1)
+    def interpolate(self, x, w):
+        """Calculate values at points ``x`` from the interpolation weights ``w``. 
+        
+        The weights ``w`` are typically generated from :meth:`anterpolate`. 
+        """
+        return (self.similarity(x, self.nodes)*w).sum(-1)
 
     def anterpolate(self, x, v):
+        """Calculate interpolation weights from values ``v`` at points ``x``.
+        
+        The weights returned are for the interpolation points given by :attr:`nodes`."""
         return (self.similarity(self.nodes, x)*v).sum(-1)
 
     def upwards_coeffs(self):
+        """Calculates the coefficients needed to interpolate from one level of the :ref:`tree <presolve>` to the 
+        next one up."""
         shifts = torch.tensor([-.5, +.5], device=self.device)
         shifts = sets.cartesian_product(shifts, self.D)
         children = shifts[..., None, :] + self.nodes/2
         return self.similarity(self.nodes, children)
 
     def downwards_coeffs(self):
+        """Calculates the coefficients needed to interpolate from one level of the :ref:`tree <presolve>` to the 
+        next one down."""
         shifts = torch.tensor([-.5, +.5], device=self.device)
         shifts = sets.cartesian_product(shifts, self.D)
         children = shifts[..., None, :] + self.nodes/2
