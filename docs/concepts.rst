@@ -143,15 +143,25 @@ Believe you me: understanding these is much easier once you've read §3.2 and ha
 
 Evaluate: weights, interactions & contributions
 ***********************************************
+Once the :ref:`presolve <presolve>` is done, actually solving the problem is done by :func:`~pybbfmm.evaluate`. This 
+takes the presolve metadata and uses it to compute the *weights*, then the *interactions*, then the *contributions*.
+Summing the contributions gets the solution.
 
 Weights
-=======
+    The :func:`~pybbfmm.weights` are effectively Chebyshev-approximations of the charge density across each cell. 
+    They're evaluated by starting at the bottom of the tree, at the leaf boxes, and recursively merging approximations
+    until the algorithm reaches the root.
 
 Interactions
-============
+    The interactions use the weights calculated previously to evaluate the field contributions between specific 
+    pairs of boxes, sources and targets. These pairs come from the u-, v-, w-, x- schemes described above. 
+    They're evaluated as the algorithm moves from the root down the tree
 
 Contributions
-=============
+    When the algorithm returns to the leaf boxes, through the interaction calculations it's accumulated a
+    :func:`~pybbfmm.far_field` approximation of how all the sources that are more than one box away from a specific 
+    box generate the field at the center of that specific box. The final step is to sum this far field contribution 
+    with the :func:`~pybbfmm.near_field` contribution that comes from sources at most one box away.
 
 .. rubric:: Footnotes
 
