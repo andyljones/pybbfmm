@@ -1,0 +1,568 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Reference &#8212; pybbfmm 0.1 documentation</title>
+    <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <script id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script src="_static/jquery.js"></script>
+    <script src="_static/underscore.js"></script>
+    <script src="_static/doctools.js"></script>
+    <script src="_static/language_data.js"></script>
+    <script async="async" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="prev" title="Concepts" href="concepts.html" />
+    <!-- Monitoring pageviews is really useful to me to see what kind of stuff I've done is useful to everyone else.
+    But I'm keen to not to track any more than that, and so this is a minimal, self-hosted solution. It records
+    nothing more than'd be in the server logs. -->
+    <script>
+      url = "https://live.andyljones.com/mat/mat.php";
+      xhr = new XMLHttpRequest();
+      xhr.open("POST", url, true);
+      xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+
+      params = 'idsite=1&rec=1'
+      params += '&url=' + encodeURIComponent(window.location.href);
+      params += '&urlref=' + encodeURIComponent(document.referrer);
+      params += '&rand=' + Math.floor(16384*Math.random())
+      xhr.send(params)
+    </script>
+    <noscript>
+      <img src="https://live.andyljones.com/mat/mat.php?idsite=1&amp;rec=1" style="border:0" alt=""/>
+    </noscript>
+
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+
+  </head><body>
+  <div class="document">
+    
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">pybbfmm</a></h1>
+
+
+
+<p class="blurb">A GPU fast multipole method</p>
+
+
+
+
+<p>
+<iframe src="https://ghbtns.com/github-btn.html?user=andyljones&repo=pybbfmm&type=star&count=False&size=large&v=2"
+  allowtransparency="true" frameborder="0" scrolling="0" width="200px" height="35px"></iframe>
+</p>
+
+
+
+
+
+<h3>Navigation</h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="concepts.html">Concepts</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">API Reference</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#module-pybbfmm">pybbfmm</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-pybbfmm.chebyshev">chebyshev</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-pybbfmm.orthantree">orthantree</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-pybbfmm.ragged">ragged</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-pybbfmm.sets">sets</a></li>
+</ul>
+</li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="concepts.html" title="previous chapter">Concepts</a></li>
+  </ul></li>
+</ul>
+</div>
+        </div>
+      </div>
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="api-reference">
+<h1>API Reference<a class="headerlink" href="#api-reference" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="module-pybbfmm">
+<span id="pybbfmm"></span><h2>pybbfmm<a class="headerlink" href="#module-pybbfmm" title="Permalink to this headline">¶</a></h2>
+<dl class="py function">
+<dt id="pybbfmm.limits">
+<code class="sig-prename descclassname">pybbfmm.</code><code class="sig-name descname">limits</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">prob</span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/andyljones/pybbfmm/tree/master/pybbfmm.py"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybbfmm.limits" title="Permalink to this definition">¶</a></dt>
+<dd><p>Calculates the geometric limits to the problem</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>prob</strong> – a <a class="reference internal" href="concepts.html#problem"><span class="std std-ref">problem</span></a>.</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>A (2, D)-tensor of the maximum and minimum extents of the problem.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="pybbfmm.scale">
+<code class="sig-prename descclassname">pybbfmm.</code><code class="sig-name descname">scale</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">prob</span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/andyljones/pybbfmm/tree/master/pybbfmm.py"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybbfmm.scale" title="Permalink to this definition">¶</a></dt>
+<dd><p>Scales a problem to lie in <span class="math notranslate nohighlight">\([-1, +1]^D\)</span>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>prob</strong> – a <a class="reference internal" href="concepts.html#problem"><span class="std std-ref">problem</span></a>.</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>a scaled <a class="reference internal" href="concepts.html#problem"><span class="std std-ref">problem</span></a> with the <code class="docutils literal notranslate"><span class="pre">limits</span></code> and <code class="docutils literal notranslate"><span class="pre">scale</span></code> as additional keys.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="pybbfmm.weights">
+<code class="sig-prename descclassname">pybbfmm.</code><code class="sig-name descname">weights</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">scaled</span></em>, <em class="sig-param"><span class="n">cheb</span></em>, <em class="sig-param"><span class="n">tree</span></em>, <em class="sig-param"><span class="n">indices</span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/andyljones/pybbfmm/tree/master/pybbfmm.py"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybbfmm.weights" title="Permalink to this definition">¶</a></dt>
+<dd><p>Calculates the <a class="reference internal" href="concepts.html#eval"><span class="std std-ref">weights</span></a> used in a solution.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>scaled</strong> – a <a class="reference internal" href="#pybbfmm.scale" title="pybbfmm.scale"><code class="xref py py-func docutils literal notranslate"><span class="pre">scale()</span></code></a>’d <a class="reference internal" href="concepts.html#problem"><span class="std std-ref">problem</span></a>.</p></li>
+<li><p><strong>cheb</strong> – a <a class="reference internal" href="#pybbfmm.chebyshev.Chebyshev" title="pybbfmm.chebyshev.Chebyshev"><code class="xref py py-class docutils literal notranslate"><span class="pre">Chebyshev</span></code></a> object.</p></li>
+<li><p><strong>tree</strong> – a <a class="reference internal" href="concepts.html#presolve"><span class="std std-ref">tree</span></a>.</p></li>
+<li><p><strong>indices</strong> – an <a class="reference internal" href="concepts.html#presolve"><span class="std std-ref">indices</span></a> dotdict.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>a (n_boxes, n_cheb_coeffs <sup>dim</sup>)-tensor of weights.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="pybbfmm.v_interactions">
+<code class="sig-prename descclassname">pybbfmm.</code><code class="sig-name descname">v_interactions</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">W</span></em>, <em class="sig-param"><span class="n">scaled</span></em>, <em class="sig-param"><span class="n">cheb</span></em>, <em class="sig-param"><span class="n">tree</span></em>, <em class="sig-param"><span class="n">scheme</span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/andyljones/pybbfmm/tree/master/pybbfmm.py"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybbfmm.v_interactions" title="Permalink to this definition">¶</a></dt>
+<dd><p>Calculates the v-<a class="reference internal" href="concepts.html#eval"><span class="std std-ref">interactions</span></a> used in a solution.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>W</strong> – the <a class="reference internal" href="#pybbfmm.weights" title="pybbfmm.weights"><code class="xref py py-func docutils literal notranslate"><span class="pre">weights()</span></code></a> for the solution.</p></li>
+<li><p><strong>scaled</strong> – a <a class="reference internal" href="#pybbfmm.scale" title="pybbfmm.scale"><code class="xref py py-func docutils literal notranslate"><span class="pre">scale()</span></code></a>’d problem.</p></li>
+<li><p><strong>cheb</strong> – a <a class="reference internal" href="#pybbfmm.chebyshev.Chebyshev" title="pybbfmm.chebyshev.Chebyshev"><code class="xref py py-class docutils literal notranslate"><span class="pre">Chebyshev</span></code></a> object.</p></li>
+<li><p><strong>tree</strong> – a <a class="reference internal" href="concepts.html#presolve"><span class="std std-ref">tree</span></a>.</p></li>
+<li><p><strong>scheme</strong> – the <a class="reference internal" href="concepts.html#presolve"><span class="std std-ref">scheme</span></a> for the solution.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>a (n_boxes, n_cheb_coeffs <sup>dim</sup>)-tensor of interactions.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="pybbfmm.x_interactions">
+<code class="sig-prename descclassname">pybbfmm.</code><code class="sig-name descname">x_interactions</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">scaled</span></em>, <em class="sig-param"><span class="n">cheb</span></em>, <em class="sig-param"><span class="n">tree</span></em>, <em class="sig-param"><span class="n">indices</span></em>, <em class="sig-param"><span class="n">scheme</span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/andyljones/pybbfmm/tree/master/pybbfmm.py"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybbfmm.x_interactions" title="Permalink to this definition">¶</a></dt>
+<dd><p>Calculates the x-<a class="reference internal" href="concepts.html#eval"><span class="std std-ref">interactions</span></a> used in a solution.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>scaled</strong> – a <a class="reference internal" href="#pybbfmm.scale" title="pybbfmm.scale"><code class="xref py py-func docutils literal notranslate"><span class="pre">scale()</span></code></a>’d problem.</p></li>
+<li><p><strong>cheb</strong> – a <a class="reference internal" href="#pybbfmm.chebyshev.Chebyshev" title="pybbfmm.chebyshev.Chebyshev"><code class="xref py py-class docutils literal notranslate"><span class="pre">Chebyshev</span></code></a> object.</p></li>
+<li><p><strong>tree</strong> – a <a class="reference internal" href="concepts.html#presolve"><span class="std std-ref">tree</span></a>.</p></li>
+<li><p><strong>indices</strong> – an <a class="reference internal" href="concepts.html#presolve"><span class="std std-ref">indices</span></a> dotdict.</p></li>
+<li><p><strong>scheme</strong> – the <a class="reference internal" href="concepts.html#presolve"><span class="std std-ref">scheme</span></a> for the solution.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>a (n_boxes, n_cheb_coeffs <sup>dim</sup>)-tensor of interactions.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="pybbfmm.w_interactions">
+<code class="sig-prename descclassname">pybbfmm.</code><code class="sig-name descname">w_interactions</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">W</span></em>, <em class="sig-param"><span class="n">scaled</span></em>, <em class="sig-param"><span class="n">cheb</span></em>, <em class="sig-param"><span class="n">tree</span></em>, <em class="sig-param"><span class="n">indices</span></em>, <em class="sig-param"><span class="n">scheme</span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/andyljones/pybbfmm/tree/master/pybbfmm.py"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybbfmm.w_interactions" title="Permalink to this definition">¶</a></dt>
+<dd><p>Calculates the w-<a class="reference internal" href="concepts.html#eval"><span class="std std-ref">interactions</span></a> used in a solution.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>W</strong> – the <a class="reference internal" href="#pybbfmm.weights" title="pybbfmm.weights"><code class="xref py py-func docutils literal notranslate"><span class="pre">weights()</span></code></a> for the solution.</p></li>
+<li><p><strong>scaled</strong> – a <a class="reference internal" href="#pybbfmm.scale" title="pybbfmm.scale"><code class="xref py py-func docutils literal notranslate"><span class="pre">scale()</span></code></a>’d problem.</p></li>
+<li><p><strong>cheb</strong> – a <a class="reference internal" href="#pybbfmm.chebyshev.Chebyshev" title="pybbfmm.chebyshev.Chebyshev"><code class="xref py py-class docutils literal notranslate"><span class="pre">Chebyshev</span></code></a> object.</p></li>
+<li><p><strong>tree</strong> – a <a class="reference internal" href="concepts.html#presolve"><span class="std std-ref">tree</span></a>.</p></li>
+<li><p><strong>indices</strong> – an <a class="reference internal" href="concepts.html#presolve"><span class="std std-ref">indices</span></a> dotdict.</p></li>
+<li><p><strong>scheme</strong> – the <a class="reference internal" href="concepts.html#presolve"><span class="std std-ref">scheme</span></a> for the solution.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>a (n_targets)-tensor of interactions.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="pybbfmm.u_interactions">
+<code class="sig-prename descclassname">pybbfmm.</code><code class="sig-name descname">u_interactions</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">scaled</span></em>, <em class="sig-param"><span class="n">indices</span></em>, <em class="sig-param"><span class="n">scheme</span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/andyljones/pybbfmm/tree/master/pybbfmm.py"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybbfmm.u_interactions" title="Permalink to this definition">¶</a></dt>
+<dd><p>Calculates the u-<a class="reference internal" href="concepts.html#eval"><span class="std std-ref">interactions</span></a> used in a solution.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>scaled</strong> – a <a class="reference internal" href="#pybbfmm.scale" title="pybbfmm.scale"><code class="xref py py-func docutils literal notranslate"><span class="pre">scale()</span></code></a>’d problem.</p></li>
+<li><p><strong>indices</strong> – an <a class="reference internal" href="concepts.html#presolve"><span class="std std-ref">indices</span></a> dotdict.</p></li>
+<li><p><strong>scheme</strong> – the <a class="reference internal" href="concepts.html#presolve"><span class="std std-ref">scheme</span></a> for the solution.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>a (n_targets)-tensor of interactions.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="pybbfmm.far_field">
+<code class="sig-prename descclassname">pybbfmm.</code><code class="sig-name descname">far_field</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">W</span></em>, <em class="sig-param"><span class="n">v</span></em>, <em class="sig-param"><span class="n">x</span></em>, <em class="sig-param"><span class="n">cheb</span></em>, <em class="sig-param"><span class="n">tree</span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/andyljones/pybbfmm/tree/master/pybbfmm.py"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybbfmm.far_field" title="Permalink to this definition">¶</a></dt>
+<dd><p>Calculates the <a class="reference internal" href="concepts.html#eval"><span class="std std-ref">far-field contributions</span></a> for each box.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>W</strong> – the <a class="reference internal" href="#pybbfmm.weights" title="pybbfmm.weights"><code class="xref py py-func docutils literal notranslate"><span class="pre">weights()</span></code></a> for the solution.</p></li>
+<li><p><strong>v</strong> – the <a class="reference internal" href="#pybbfmm.v_interactions" title="pybbfmm.v_interactions"><code class="xref py py-func docutils literal notranslate"><span class="pre">v_interactions()</span></code></a>.</p></li>
+<li><p><strong>x</strong> – the <a class="reference internal" href="#pybbfmm.x_interactions" title="pybbfmm.x_interactions"><code class="xref py py-func docutils literal notranslate"><span class="pre">x_interactions()</span></code></a>.</p></li>
+<li><p><strong>cheb</strong> – a <a class="reference internal" href="#pybbfmm.chebyshev.Chebyshev" title="pybbfmm.chebyshev.Chebyshev"><code class="xref py py-class docutils literal notranslate"><span class="pre">Chebyshev</span></code></a> object.</p></li>
+<li><p><strong>tree</strong> – a <a class="reference internal" href="concepts.html#presolve"><span class="std std-ref">tree</span></a>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>a (n_boxes, n_cheb_coeffs <sup>dim</sup>)-tensor of far-field contributions</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="pybbfmm.target_far_field">
+<code class="sig-prename descclassname">pybbfmm.</code><code class="sig-name descname">target_far_field</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">F</span></em>, <em class="sig-param"><span class="n">scaled</span></em>, <em class="sig-param"><span class="n">cheb</span></em>, <em class="sig-param"><span class="n">tree</span></em>, <em class="sig-param"><span class="n">indices</span></em>, <em class="sig-param"><span class="n">chunksize</span><span class="o">=</span><span class="default_value">1000000</span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/andyljones/pybbfmm/tree/master/pybbfmm.py"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybbfmm.target_far_field" title="Permalink to this definition">¶</a></dt>
+<dd><p>Calculates the <a class="reference internal" href="concepts.html#eval"><span class="std std-ref">far-field contributions</span></a> for each target.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>F</strong> – the <a class="reference internal" href="#pybbfmm.far_field" title="pybbfmm.far_field"><code class="xref py py-func docutils literal notranslate"><span class="pre">far_field()</span></code></a> contributions for each box.</p></li>
+<li><p><strong>scaled</strong> – the <code class="xref py py-func docutils literal notranslate"><span class="pre">scale'd()</span></code> problem.</p></li>
+<li><p><strong>cheb</strong> – a <a class="reference internal" href="#pybbfmm.chebyshev.Chebyshev" title="pybbfmm.chebyshev.Chebyshev"><code class="xref py py-class docutils literal notranslate"><span class="pre">Chebyshev</span></code></a> object.</p></li>
+<li><p><strong>tree</strong> – a <a class="reference internal" href="concepts.html#presolve"><span class="std std-ref">tree</span></a>.</p></li>
+<li><p><strong>indices</strong> – an <a class="reference internal" href="concepts.html#presolve"><span class="std std-ref">indices</span></a> dotdict.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>a (n_targets,)-tensor of far-field contributions.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="pybbfmm.presolve">
+<code class="sig-prename descclassname">pybbfmm.</code><code class="sig-name descname">presolve</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">prob</span></em>, <em class="sig-param"><span class="n">N</span><span class="o">=</span><span class="default_value">4</span></em>, <em class="sig-param"><span class="n">capacity</span><span class="o">=</span><span class="default_value">8</span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/andyljones/pybbfmm/tree/master/pybbfmm.py"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybbfmm.presolve" title="Permalink to this definition">¶</a></dt>
+<dd><p>Presolves a <a class="reference internal" href="concepts.html#problem"><span class="std std-ref">problem</span></a>, returning a <a class="reference internal" href="concepts.html#dotdicts"><span class="std std-ref">dotdict</span></a> full of information
+that can be used to <a class="reference internal" href="#pybbfmm.evaluate" title="pybbfmm.evaluate"><code class="xref py py-func docutils literal notranslate"><span class="pre">evaluate()</span></code></a> any problem with the same points and kernel.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>prob</strong> – the <a class="reference internal" href="concepts.html#problem"><span class="std std-ref">problem</span></a> to presolve.</p></li>
+<li><p><strong>N</strong> – the number of <code class="xref py py-class docutils literal notranslate"><span class="pre">Chebyshev</span></code> nodes to use.</p></li>
+<li><p><strong>capacity</strong> – the maximum number of sources or targets per box.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>a dotdict full of <a class="reference internal" href="concepts.html#presolve"><span class="std std-ref">presolve</span></a> data.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="pybbfmm.evaluate">
+<code class="sig-prename descclassname">pybbfmm.</code><code class="sig-name descname">evaluate</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">cheb</span></em>, <em class="sig-param"><span class="n">scaled</span></em>, <em class="sig-param"><span class="n">tree</span></em>, <em class="sig-param"><span class="n">scheme</span></em>, <em class="sig-param"><span class="n">indices</span></em>, <em class="sig-param"><span class="n">depths</span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/andyljones/pybbfmm/tree/master/pybbfmm.py"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybbfmm.evaluate" title="Permalink to this definition">¶</a></dt>
+<dd><p>Evaluates a <a class="reference internal" href="concepts.html#problem"><span class="std std-ref">problem</span></a> using <a class="reference internal" href="#pybbfmm.presolve" title="pybbfmm.presolve"><code class="xref py py-func docutils literal notranslate"><span class="pre">presolve()</span></code></a> data. This lets you do the expensive
+part - the presolve - once for any configuration of points.</p>
+<p>The arguments are as returned by <a class="reference internal" href="#pybbfmm.presolve" title="pybbfmm.presolve"><code class="xref py py-func docutils literal notranslate"><span class="pre">presolve()</span></code></a>. You can swap out the <a class="reference internal" href="#pybbfmm.scale" title="pybbfmm.scale"><code class="xref py py-func docutils literal notranslate"><span class="pre">scale()</span></code></a>’d problem to 
+solve a different problem to the one you presolved.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>a (n_target,)-tensor of field intensities at the targets.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="pybbfmm.solve">
+<code class="sig-prename descclassname">pybbfmm.</code><code class="sig-name descname">solve</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">prob</span></em>, <em class="sig-param"><span class="n">N</span><span class="o">=</span><span class="default_value">4</span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/andyljones/pybbfmm/tree/master/pybbfmm.py"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybbfmm.solve" title="Permalink to this definition">¶</a></dt>
+<dd><p>Solves the given <a class="reference internal" href="concepts.html#problem"><span class="std std-ref">problem</span></a>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>prob</strong> – the <a class="reference internal" href="concepts.html#problem"><span class="std std-ref">problem</span></a> to solve.</p></li>
+<li><p><strong>N</strong> – the number of <code class="xref py py-class docutils literal notranslate"><span class="pre">Chebyshev</span></code> nodes to use.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>a (n_target,)-tensor of field intensities at the targets.</p>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+<div class="section" id="module-pybbfmm.chebyshev">
+<span id="chebyshev"></span><h2>chebyshev<a class="headerlink" href="#module-pybbfmm.chebyshev" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt id="pybbfmm.chebyshev.Chebyshev">
+<em class="property">class </em><code class="sig-prename descclassname">pybbfmm.chebyshev.</code><code class="sig-name descname">Chebyshev</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">N</span></em>, <em class="sig-param"><span class="n">D</span></em>, <em class="sig-param"><span class="n">device</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/andyljones/pybbfmm/tree/master/pybbfmm/chebyshev.py"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybbfmm.chebyshev.Chebyshev" title="Permalink to this definition">¶</a></dt>
+<dd><p>Helps with Chebyshev interpolation.</p>
+<p>Interpolation is assumed to happen on <span class="math notranslate nohighlight">\([-1, +1]^D\)</span>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>N</strong> – the number of Chebyshev nodes along each dimension.</p></li>
+<li><p><strong>D</strong> – the number of dimensions</p></li>
+<li><p><strong>device</strong> – the device to cache things on. Typically <code class="docutils literal notranslate"><span class="pre">'cuda'</span></code>.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt id="pybbfmm.chebyshev.Chebyshev.nodes">
+<em class="property">property </em><code class="sig-name descname">nodes</code><a class="reference external" href="https://github.com/andyljones/pybbfmm/tree/master/pybbfmm/chebyshev.py"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybbfmm.chebyshev.Chebyshev.nodes" title="Permalink to this definition">¶</a></dt>
+<dd><p>A cached copy of the locations of the Chebyshev nodes, given as a (N:superscript:<cite>D</cite>, D)-tensor.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pybbfmm.chebyshev.Chebyshev.similarity">
+<code class="sig-name descname">similarity</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">a</span></em>, <em class="sig-param"><span class="n">b</span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/andyljones/pybbfmm/tree/master/pybbfmm/chebyshev.py"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybbfmm.chebyshev.Chebyshev.similarity" title="Permalink to this definition">¶</a></dt>
+<dd><p>Calculates the Chebyshev ‘similarity’ between each pair of two sets of points.</p>
+<p>Don’t know if it’s called similarity anywhere else, but it’s the matrix of weights that lets you go from 
+concrete values to interpolation weights and vice versa.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>a</strong> – a (*ms, d)-tensor of points</p></li>
+<li><p><strong>b</strong> – a (*ns, d)-tensor of points</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>a (*ms, *ns)-tensor of similarities between <code class="docutils literal notranslate"><span class="pre">a</span></code> and <code class="docutils literal notranslate"><span class="pre">b</span></code>’s points.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pybbfmm.chebyshev.Chebyshev.interpolate">
+<code class="sig-name descname">interpolate</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em>, <em class="sig-param"><span class="n">w</span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/andyljones/pybbfmm/tree/master/pybbfmm/chebyshev.py"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybbfmm.chebyshev.Chebyshev.interpolate" title="Permalink to this definition">¶</a></dt>
+<dd><p>Calculate values at points <code class="docutils literal notranslate"><span class="pre">x</span></code> from the interpolation weights <code class="docutils literal notranslate"><span class="pre">w</span></code>.</p>
+<p>The weights <code class="docutils literal notranslate"><span class="pre">w</span></code> are typically generated from <a class="reference internal" href="#pybbfmm.chebyshev.Chebyshev.anterpolate" title="pybbfmm.chebyshev.Chebyshev.anterpolate"><code class="xref py py-meth docutils literal notranslate"><span class="pre">anterpolate()</span></code></a>.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pybbfmm.chebyshev.Chebyshev.anterpolate">
+<code class="sig-name descname">anterpolate</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em>, <em class="sig-param"><span class="n">v</span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/andyljones/pybbfmm/tree/master/pybbfmm/chebyshev.py"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybbfmm.chebyshev.Chebyshev.anterpolate" title="Permalink to this definition">¶</a></dt>
+<dd><p>Calculate interpolation weights from values <code class="docutils literal notranslate"><span class="pre">v</span></code> at points <code class="docutils literal notranslate"><span class="pre">x</span></code>.</p>
+<p>The weights returned are for the interpolation points given by <a class="reference internal" href="#pybbfmm.chebyshev.Chebyshev.nodes" title="pybbfmm.chebyshev.Chebyshev.nodes"><code class="xref py py-attr docutils literal notranslate"><span class="pre">nodes</span></code></a>.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pybbfmm.chebyshev.Chebyshev.upwards_coeffs">
+<code class="sig-name descname">upwards_coeffs</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference external" href="https://github.com/andyljones/pybbfmm/tree/master/pybbfmm/chebyshev.py"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybbfmm.chebyshev.Chebyshev.upwards_coeffs" title="Permalink to this definition">¶</a></dt>
+<dd><p>Calculates the coefficients needed to interpolate from one level of the <a class="reference internal" href="concepts.html#presolve"><span class="std std-ref">tree</span></a> to the 
+next one up.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pybbfmm.chebyshev.Chebyshev.downwards_coeffs">
+<code class="sig-name descname">downwards_coeffs</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference external" href="https://github.com/andyljones/pybbfmm/tree/master/pybbfmm/chebyshev.py"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybbfmm.chebyshev.Chebyshev.downwards_coeffs" title="Permalink to this definition">¶</a></dt>
+<dd><p>Calculates the coefficients needed to interpolate from one level of the <a class="reference internal" href="concepts.html#presolve"><span class="std std-ref">tree</span></a> to the 
+next one down.</p>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="module-pybbfmm.orthantree">
+<span id="orthantree"></span><h2>orthantree<a class="headerlink" href="#module-pybbfmm.orthantree" title="Permalink to this headline">¶</a></h2>
+<dl class="py function">
+<dt id="pybbfmm.orthantree.orthantree">
+<code class="sig-prename descclassname">pybbfmm.orthantree.</code><code class="sig-name descname">orthantree</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">scaled</span></em>, <em class="sig-param"><span class="n">capacity</span><span class="o">=</span><span class="default_value">8</span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/andyljones/pybbfmm/tree/master/pybbfmm/orthantree.py"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybbfmm.orthantree.orthantree" title="Permalink to this definition">¶</a></dt>
+<dd><p>Constructs a <a class="reference internal" href="concepts.html#presolve"><span class="std std-ref">tree</span></a> for the given <a class="reference internal" href="#pybbfmm.scale" title="pybbfmm.scale"><code class="xref py py-func docutils literal notranslate"><span class="pre">scale()</span></code></a>’d problem.</p>
+<p>This is a bit of a mess of a function, but long story short it starts with all the sources allocated to the root
+and repeatedly subdivides overfull boxes, constructing the various tree tensors as it goes.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>scaled</strong> – <a class="reference internal" href="#pybbfmm.scale" title="pybbfmm.scale"><code class="xref py py-func docutils literal notranslate"><span class="pre">scale()</span></code></a>’d problem.</p></li>
+<li><p><strong>capacity</strong> – the max number of sources or targets per box.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>A <a class="reference internal" href="concepts.html#presolve"><span class="std std-ref">tree</span></a>.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="pybbfmm.orthantree.neighbour_boxes">
+<code class="sig-prename descclassname">pybbfmm.orthantree.</code><code class="sig-name descname">neighbour_boxes</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">tree</span></em>, <em class="sig-param"><span class="n">indices</span></em>, <em class="sig-param"><span class="n">directions</span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/andyljones/pybbfmm/tree/master/pybbfmm/orthantree.py"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybbfmm.orthantree.neighbour_boxes" title="Permalink to this definition">¶</a></dt>
+<dd><p>Finds the neighbour of <cite>indices</cite> in the tree in the given direction.</p>
+<p>There’s a non-vectorized (and easier to understand) version of this function 
+<a class="reference external" href="https://stackoverflow.com/questions/32412107/quadtree-find-neighbor/61211884#61211884">here</a>.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt id="pybbfmm.orthantree.u_scheme">
+<code class="sig-prename descclassname">pybbfmm.orthantree.</code><code class="sig-name descname">u_scheme</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">tree</span></em>, <em class="sig-param"><span class="n">neighbours</span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/andyljones/pybbfmm/tree/master/pybbfmm/orthantree.py"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybbfmm.orthantree.u_scheme" title="Permalink to this definition">¶</a></dt>
+<dd><p>Calculates the u-<a class="reference internal" href="concepts.html#presolve"><span class="std std-ref">scheme</span></a>.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt id="pybbfmm.orthantree.v_scheme">
+<code class="sig-prename descclassname">pybbfmm.orthantree.</code><code class="sig-name descname">v_scheme</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">tree</span></em>, <em class="sig-param"><span class="n">depths</span></em>, <em class="sig-param"><span class="n">directions</span></em>, <em class="sig-param"><span class="n">neighbours</span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/andyljones/pybbfmm/tree/master/pybbfmm/orthantree.py"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybbfmm.orthantree.v_scheme" title="Permalink to this definition">¶</a></dt>
+<dd><p>Calculates the v-<a class="reference internal" href="concepts.html#presolve"><span class="std std-ref">scheme</span></a>.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt id="pybbfmm.orthantree.w_pairs">
+<code class="sig-prename descclassname">pybbfmm.orthantree.</code><code class="sig-name descname">w_pairs</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">tree</span></em>, <em class="sig-param"><span class="n">directions</span></em>, <em class="sig-param"><span class="n">neighbours</span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/andyljones/pybbfmm/tree/master/pybbfmm/orthantree.py"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybbfmm.orthantree.w_pairs" title="Permalink to this definition">¶</a></dt>
+<dd><p>Metadata needed for calculating w- and x-<a class="reference internal" href="concepts.html#presolve"><span class="std std-ref">scheme</span></a>.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt id="pybbfmm.orthantree.interaction_scheme">
+<code class="sig-prename descclassname">pybbfmm.orthantree.</code><code class="sig-name descname">interaction_scheme</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">tree</span></em>, <em class="sig-param"><span class="n">depths</span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/andyljones/pybbfmm/tree/master/pybbfmm/orthantree.py"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybbfmm.orthantree.interaction_scheme" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the datastructures needed to calculate the <a class="reference internal" href="concepts.html#presolve"><span class="std std-ref">interactions</span></a> between boxes.</p>
+<p>The datastructures are pretty heterogeneous because, well, performance. They’re set
+up so the data needed can be got at fast without blowing up the memory budget.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>tree</strong> – a <a class="reference internal" href="concepts.html#presolve"><span class="std std-ref">tree</span></a>.</p></li>
+<li><p><strong>depths</strong> – the <a class="reference internal" href="concepts.html#presolve"><span class="std std-ref">depths</span></a> to go with the tree.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>a <a class="reference internal" href="concepts.html#presolve"><span class="std std-ref">scheme</span></a>.</p>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+<div class="section" id="module-pybbfmm.ragged">
+<span id="ragged"></span><h2>ragged<a class="headerlink" href="#module-pybbfmm.ragged" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt id="pybbfmm.ragged.Ragged">
+<em class="property">class </em><code class="sig-prename descclassname">pybbfmm.ragged.</code><code class="sig-name descname">Ragged</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">image</span></em>, <em class="sig-param"><span class="n">cardinalities</span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/andyljones/pybbfmm/tree/master/pybbfmm/ragged.py"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybbfmm.ragged.Ragged" title="Permalink to this definition">¶</a></dt>
+<dd><p>A ragged tensor, which is to a tensor of different-length tensors.</p>
+<p>The different-length sub-tensors are concatenated together to make a single backing tensor. This makes
+for fast element-wise operations.</p>
+<p>A lot of the language in this class’s implementation comes from thinking of a ragged tensor as a mapping
+from indices to sub-tensors.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>image</strong> – the sub-tensors, concatenated together in order. The image of the mapping.</p></li>
+<li><p><strong>cardinalities</strong> – the number of elements in each sub-tensor.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt id="pybbfmm.ragged.Ragged.domain">
+<em class="property">property </em><code class="sig-name descname">domain</code><a class="reference external" href="https://github.com/andyljones/pybbfmm/tree/master/pybbfmm/ragged.py"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybbfmm.ragged.Ragged.domain" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the size of the domain - ie the number of sub-tensors.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pybbfmm.ragged.Ragged.range">
+<em class="property">property </em><code class="sig-name descname">range</code><a class="reference external" href="https://github.com/andyljones/pybbfmm/tree/master/pybbfmm/ragged.py"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybbfmm.ragged.Ragged.range" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the size of the arnge - ie the sum of the lengths of all the subtensors, or equivalently the size
+of the backing tensor.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pybbfmm.ragged.Ragged.kth">
+<code class="sig-name descname">kth</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">qs</span></em>, <em class="sig-param"><span class="n">c</span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/andyljones/pybbfmm/tree/master/pybbfmm/ragged.py"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybbfmm.ragged.Ragged.kth" title="Permalink to this definition">¶</a></dt>
+<dd><p>For each <code class="docutils literal notranslate"><span class="pre">q</span></code> in <code class="docutils literal notranslate"><span class="pre">qs</span></code>, returns the <code class="docutils literal notranslate"><span class="pre">c</span></code> th element of the <code class="docutils literal notranslate"><span class="pre">q</span></code> th subtensor.</p>
+<p>Only returns valid values - ie it only returns the results for which <code class="docutils literal notranslate"><span class="pre">q</span></code> is at least <code class="docutils literal notranslate"><span class="pre">c+1</span></code> elements long.
+To indicate which <code class="docutils literal notranslate"><span class="pre">q</span></code> were valid, it also returns a mask.</p>
+<p>For example,</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># Sub-tensors are [1, 2], [10, 11, 12], [20] </span>
+<span class="n">r</span> <span class="o">=</span> <span class="n">Ragged</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="mi">11</span><span class="p">,</span> <span class="mi">12</span><span class="p">,</span> <span class="mi">20</span><span class="p">],</span> <span class="p">[</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span>
+<span class="n">r</span><span class="o">.</span><span class="n">kth</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">],</span> <span class="mi">1</span><span class="p">)</span>
+<span class="c1"># [11], [True, False]</span>
+</pre></div>
+</div>
+<p>One way to think about this is as if the sub-tensors were arranged in a grid</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>q c 0   1   2
+0  [1,  2]
+1  [10, 11, 12]
+2  [20]
+</pre></div>
+</div>
+<p>Calling <code class="docutils literal notranslate"><span class="pre">r.kth([1,</span> <span class="pre">2],</span> <span class="pre">1)</span></code> means taking rows [1, 2] and column 1. We get back the values that exist in this 
+column - <code class="docutils literal notranslate"><span class="pre">[11]</span></code> and a mask saying which rows stretch as far as column <code class="docutils literal notranslate"><span class="pre">c</span></code>.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pybbfmm.ragged.Ragged.slice">
+<code class="sig-name descname">slice</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">idx</span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/andyljones/pybbfmm/tree/master/pybbfmm/ragged.py"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybbfmm.ragged.Ragged.slice" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the slice corresponding to the <code class="docutils literal notranslate"><span class="pre">idx</span></code> th sub-tensor.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pybbfmm.ragged.Ragged.image">
+<code class="sig-name descname">image</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">idx</span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/andyljones/pybbfmm/tree/master/pybbfmm/ragged.py"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybbfmm.ragged.Ragged.image" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the <code class="docutils literal notranslate"><span class="pre">idx</span></code> th sub-tensor.</p>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="module-pybbfmm.sets">
+<span id="sets"></span><h2>sets<a class="headerlink" href="#module-pybbfmm.sets" title="Permalink to this headline">¶</a></h2>
+<dl class="py function">
+<dt id="pybbfmm.sets.cartesian_product">
+<code class="sig-prename descclassname">pybbfmm.sets.</code><code class="sig-name descname">cartesian_product</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">xs</span></em>, <em class="sig-param"><span class="n">D</span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/andyljones/pybbfmm/tree/master/pybbfmm/sets.py"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybbfmm.sets.cartesian_product" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns all D-tuples of <code class="docutils literal notranslate"><span class="pre">xs</span></code> as a (n_xs, n_xs, …, *tail_dims)-tensor.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt id="pybbfmm.sets.flat_cartesian_product">
+<code class="sig-prename descclassname">pybbfmm.sets.</code><code class="sig-name descname">flat_cartesian_product</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">xs</span></em>, <em class="sig-param"><span class="n">D</span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/andyljones/pybbfmm/tree/master/pybbfmm/sets.py"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybbfmm.sets.flat_cartesian_product" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns all D-tuples of <code class="docutils literal notranslate"><span class="pre">xs</span></code> as a (n_xs <sup>D</sup>, *tail_dims)-tensor.</p>
+</dd></dl>
+
+</div>
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+    <div class="clearer"></div>
+  </div>
+    <div class="footer">
+      &copy;2020, Andy L. Jones.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.1.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="_sources/reference.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

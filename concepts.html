@@ -1,0 +1,279 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Concepts &#8212; pybbfmm 0.1 documentation</title>
+    <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <script id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script src="_static/jquery.js"></script>
+    <script src="_static/underscore.js"></script>
+    <script src="_static/doctools.js"></script>
+    <script src="_static/language_data.js"></script>
+    <script async="async" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="API Reference" href="reference.html" />
+    <link rel="prev" title="pybbfmm" href="index.html" />
+    <!-- Monitoring pageviews is really useful to me to see what kind of stuff I've done is useful to everyone else.
+    But I'm keen to not to track any more than that, and so this is a minimal, self-hosted solution. It records
+    nothing more than'd be in the server logs. -->
+    <script>
+      url = "https://live.andyljones.com/mat/mat.php";
+      xhr = new XMLHttpRequest();
+      xhr.open("POST", url, true);
+      xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+
+      params = 'idsite=1&rec=1'
+      params += '&url=' + encodeURIComponent(window.location.href);
+      params += '&urlref=' + encodeURIComponent(document.referrer);
+      params += '&rand=' + Math.floor(16384*Math.random())
+      xhr.send(params)
+    </script>
+    <noscript>
+      <img src="https://live.andyljones.com/mat/mat.php?idsite=1&amp;rec=1" style="border:0" alt=""/>
+    </noscript>
+
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+
+  </head><body>
+  <div class="document">
+    
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">pybbfmm</a></h1>
+
+
+
+<p class="blurb">A GPU fast multipole method</p>
+
+
+
+
+<p>
+<iframe src="https://ghbtns.com/github-btn.html?user=andyljones&repo=pybbfmm&type=star&count=False&size=large&v=2"
+  allowtransparency="true" frameborder="0" scrolling="0" width="200px" height="35px"></iframe>
+</p>
+
+
+
+
+
+<h3>Navigation</h3>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Concepts</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#arrdicts-and-dotdicts">arrdicts and dotdicts</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#problems">Problems</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#presolve-trees-indices-schemes">Presolve: trees, indices &amp; schemes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#evaluate-weights-interactions-contributions">Evaluate: weights, interactions &amp; contributions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="reference.html">API Reference</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="index.html" title="previous chapter">pybbfmm</a></li>
+      <li>Next: <a href="reference.html" title="next chapter">API Reference</a></li>
+  </ul></li>
+</ul>
+</div>
+        </div>
+      </div>
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="concepts">
+<h1>Concepts<a class="headerlink" href="#concepts" title="Permalink to this headline">¶</a></h1>
+<p>There are some concepts that show up in many places in the pybbfmm docs, so they’re collected together here.</p>
+<div class="section" id="arrdicts-and-dotdicts">
+<span id="dotdicts"></span><h2>arrdicts and dotdicts<a class="headerlink" href="#arrdicts-and-dotdicts" title="Permalink to this headline">¶</a></h2>
+<p>dotdicts and arrdicts are somewhere between dictionaries and classes, and are a crutch for research code that I’m
+immensely fond of. The <a class="reference external" href="http://andyljones.com/megastep/concepts.html#dotdicts" title="(in megastep)"><span class="xref std std-ref">megastep docs have a lot more detail</span></a>.</p>
+</div>
+<div class="section" id="problems">
+<span id="problem"></span><h2>Problems<a class="headerlink" href="#problems" title="Permalink to this headline">¶</a></h2>
+<p>A problem is a <a class="reference internal" href="#dotdicts"><span class="std std-ref">dotdict</span></a> that describes the problem you’re trying to solve. A problem dotdict has
+keys</p>
+<dl>
+<dt><code class="docutils literal notranslate"><span class="pre">sources</span></code></dt><dd><p>A (n_sources, D)-tensor giving the D-dimensional locations of the source charges.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">targets</span></code></dt><dd><p>A (n_targets, D)-tensor giving the D-dimensional locations of the target points you want to evaluate the field at.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">charges</span></code></dt><dd><p>A (n_sources,)-tensor giving the ‘charge’ at each source point.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">kernel</span></code></dt><dd><p>A function that takes a tensor of source locations and a tensor of target locations and returns the strength of the
+sources’ fields at the target points. For example, an inverse-square law uses a kernel</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">quad_kernel</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+    <span class="k">return</span> <span class="mi">1</span><span class="o">/</span><span class="p">((</span><span class="n">a</span> <span class="o">-</span> <span class="n">b</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd>
+</dl>
+<p>One important restriction is that <strong>multiple targets and sources should not have the exact same location</strong>. Otherwise
+the tree construction might not terminate.</p>
+</div>
+<div class="section" id="presolve-trees-indices-schemes">
+<span id="presolve"></span><h2>Presolve: trees, indices &amp; schemes<a class="headerlink" href="#presolve-trees-indices-schemes" title="Permalink to this headline">¶</a></h2>
+<p>The <a class="reference internal" href="reference.html#pybbfmm.presolve" title="pybbfmm.presolve"><code class="xref py py-func docutils literal notranslate"><span class="pre">presolve()</span></code></a> computes a bunch of metadata based on only the positions of the problem’s points and the
+kernel used. This presolve metadata can then be used for as many <a class="reference internal" href="#eval"><span class="std std-ref">evaluations</span></a> on different charges as you
+like.</p>
+<p>If you ever get confused about any presolve metadata, the best way to figure things out is to generate the metadata
+for a low-capacity, 1D problem:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">pybbfmm</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">from</span> <span class="nn">pybbfmm.test</span> <span class="kn">import</span> <span class="o">*</span>
+
+<span class="n">prob</span> <span class="o">=</span> <span class="n">arrdict</span><span class="o">.</span><span class="n">arrdict</span><span class="p">(</span>
+    <span class="n">sources</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="p">[</span><span class="o">+.</span><span class="mi">5</span><span class="p">],</span> <span class="p">[</span><span class="o">+</span><span class="mi">1</span><span class="p">]]),</span>
+    <span class="n">charges</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">3</span><span class="p">,)),</span>
+    <span class="n">targets</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([[</span><span class="mf">0.</span><span class="p">]])</span>
+<span class="p">)</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">t</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">as_tensor</span><span class="p">(</span><span class="n">t</span><span class="p">)</span><span class="o">.</span><span class="n">float</span><span class="p">())</span>
+<span class="n">prob</span><span class="p">[</span><span class="s1">&#39;kernel&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">quad_kernel</span>
+
+<span class="n">presolve</span><span class="p">(</span><span class="n">prob</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="section" id="tree-construction">
+<h3>Tree Construction<a class="headerlink" href="#tree-construction" title="Permalink to this headline">¶</a></h3>
+<p>There are two steps to the presolve. The first step is to build a tree over the sources and targets, which is done by
+<a class="reference internal" href="reference.html#pybbfmm.orthantree.orthantree" title="pybbfmm.orthantree.orthantree"><code class="xref py py-func docutils literal notranslate"><span class="pre">orthantree()</span></code></a>. It returns three things: the tree, the indices and the depths. These
+are described below.</p>
+<div class="section" id="trees">
+<h4>Trees<a class="headerlink" href="#trees" title="Permalink to this headline">¶</a></h4>
+<p>The most important bit of presolve information is the <em>tree</em>. The tree is the binary partition of space that’s used
+to figure out which sources it’s okay to approximate when calculating which points. It’s usually constructed by
+<a class="reference internal" href="reference.html#pybbfmm.orthantree.orthantree" title="pybbfmm.orthantree.orthantree"><code class="xref py py-func docutils literal notranslate"><span class="pre">orthantree()</span></code></a> and looks something like this</p>
+<p>TODO: imagery of a tree</p>
+<p>The internal nodes of the tree are called <em>boxes</em>. The boxes are represented as an index, with the root being index 0.
+This means that you’ll usually find the attribute of box <code class="docutils literal notranslate"><span class="pre">i</span></code> at index <code class="docutils literal notranslate"><span class="pre">i</span></code> of a tensor: <code class="docutils literal notranslate"><span class="pre">parents[3]</span></code> gives the
+index of the parent of <code class="docutils literal notranslate"><span class="pre">3</span></code>, <code class="docutils literal notranslate"><span class="pre">children[3]</span></code> gives the children of <code class="docutils literal notranslate"><span class="pre">3</span></code>, etc etc.</p>
+<p>The tree is represented as an <a class="reference internal" href="#dotdicts"><span class="std std-ref">arrdict</span></a> of tensors. Each tensor is n_boxes long, and gives a different
+property of the boxes:</p>
+<dl class="simple">
+<dt><code class="docutils literal notranslate"><span class="pre">id</span></code></dt><dd><p>Give the boxes’ ID, which is just… its index. Useful to have around, not actually informative.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">parents</span></code></dt><dd><p>Gives the boxes’ parents. The <code class="docutils literal notranslate"><span class="pre">i</span></code> th element is the index of box <code class="docutils literal notranslate"><span class="pre">i</span></code> s parent.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">depths</span></code></dt><dd><p>Gives the boxes’ depth in the tree. The <code class="docutils literal notranslate"><span class="pre">i</span></code> th element is the depth of box <code class="docutils literal notranslate"><span class="pre">i</span></code>, with zero corresponding to the root.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">centers</span></code></dt><dd><p>Gives coordinates of the boxes’ centers. The <code class="docutils literal notranslate"><span class="pre">i</span></code> th element… you get the idea.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">terminal</span></code></dt><dd><p>Gives a boolean saying whether that box is a leaf. True means the box is a leaf; that it has no children.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">children</span></code></dt><dd><p>Gives the boxes’ children. The <code class="docutils literal notranslate"><span class="pre">i``th</span> <span class="pre">element</span> <span class="pre">is</span> <span class="pre">an</span> <span class="pre">(2,)/(2,</span> <span class="pre">2)/(2,</span> <span class="pre">2,</span> <span class="pre">2)/etc-tensor</span> <span class="pre">of</span> <span class="pre">the</span> <span class="pre">2</span> <span class="pre">:sup:`D`</span> <span class="pre">children</span> <span class="pre">of</span> <span class="pre">box</span> <span class="pre">``i</span></code>.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">descent</span></code></dt><dd><p>Gives the boxes’ descent: whether it’s a left-child or a right-child, etc etc. Practically this means the <code class="docutils literal notranslate"><span class="pre">i</span></code> th
+element is a (D,)-vector of (-1, +1)’s, with the value indicating which side of the parent’s center the box is on.</p>
+</dd>
+</dl>
+</div>
+<div class="section" id="indices">
+<h4>Indices<a class="headerlink" href="#indices" title="Permalink to this headline">¶</a></h4>
+<p>While the tree arrdict itself gives the relationships between the boxes of the tree, it doesn’t have any information
+about how the sources and targets relate to the boxes. That’s done by the second return from
+<a class="reference internal" href="reference.html#pybbfmm.orthantree.orthantree" title="pybbfmm.orthantree.orthantree"><code class="xref py py-func docutils literal notranslate"><span class="pre">orthantree()</span></code></a>, <code class="docutils literal notranslate"><span class="pre">indices</span></code>. This is a dotdict with two elements</p>
+<dl class="simple">
+<dt><code class="docutils literal notranslate"><span class="pre">sources</span></code></dt><dd><p>A (n_source,)-tensor where the <code class="docutils literal notranslate"><span class="pre">i</span></code> th element gives which box the <code class="docutils literal notranslate"><span class="pre">i</span></code> th source is in</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">targets</span></code></dt><dd><p>A (n_target,)-tensor where the <code class="docutils literal notranslate"><span class="pre">i</span></code> th element gives which box the <code class="docutils literal notranslate"><span class="pre">i</span></code> th target is in</p>
+</dd>
+</dl>
+</div>
+<div class="section" id="depths">
+<h4>Depths<a class="headerlink" href="#depths" title="Permalink to this headline">¶</a></h4>
+<p>The third return from <a class="reference internal" href="reference.html#pybbfmm.orthantree.orthantree" title="pybbfmm.orthantree.orthantree"><code class="xref py py-func docutils literal notranslate"><span class="pre">orthantree()</span></code></a> is <code class="docutils literal notranslate"><span class="pre">depths</span></code>. This is a <a class="reference internal" href="reference.html#pybbfmm.ragged.Ragged" title="pybbfmm.ragged.Ragged"><code class="xref py py-class docutils literal notranslate"><span class="pre">Ragged</span></code></a>
+that maps depths to the boxes at that level.</p>
+</div>
+</div>
+<div class="section" id="scheme-construction">
+<h3>Scheme Construction<a class="headerlink" href="#scheme-construction" title="Permalink to this headline">¶</a></h3>
+<p>The second step in the presolve is to take all the information from the tree construction stage and use it to generate
+the <em>interaction lists</em>. The interaction lists describe which boxes, sources and targets interact with which other boxes,
+sources and targets.</p>
+<p>Keeping actual lists of all the pairs of interacting entities is memory-inefficient, so instead what’s generated at
+this step is enough information to be able to rapidly construct the interacting-entity lists on demand. This
+information is - for the purposes of this library - called the <em>scheme</em> for the list. There are four lists, so there
+are four schemes.</p>
+<p>The four interaction lists come from <a class="footnote-reference brackets" href="#carrier88" id="id1">1</a>. The most useful parts of the paper are §3.2, Notation, along with
+Fig 5.</p>
+<blockquote>
+<div><ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">u</span></code>: the u-list of a leaf box is the set of neighbouring leaf boxes.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">v</span></code>: the v-list of a box is the children of the parent’s colleagues that are separated from the box.</p></li>
+<li><dl class="simple">
+<dt><code class="docutils literal notranslate"><span class="pre">w</span></code>: the w-list of a leaf is the set of descendents of colleagues whose parents are adjacent but which aren’t</dt><dd><p>adjacent themselves</p>
+</dd>
+</dl>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">x</span></code>: the x-list of a box is set of all boxes for which this box turns up in the other box’s <code class="docutils literal notranslate"><span class="pre">w</span></code> list.</p></li>
+</ul>
+</div></blockquote>
+<p>Believe you me: understanding these is much easier once you’ve read §3.2 and had a hard look at Fig 5.</p>
+</div>
+</div>
+<div class="section" id="evaluate-weights-interactions-contributions">
+<span id="eval"></span><h2>Evaluate: weights, interactions &amp; contributions<a class="headerlink" href="#evaluate-weights-interactions-contributions" title="Permalink to this headline">¶</a></h2>
+<p>Once the <a class="reference internal" href="#presolve"><span class="std std-ref">presolve</span></a> is done, actually solving the problem is done by <a class="reference internal" href="reference.html#pybbfmm.evaluate" title="pybbfmm.evaluate"><code class="xref py py-func docutils literal notranslate"><span class="pre">evaluate()</span></code></a>. This
+takes the presolve metadata and uses it to compute the <em>weights</em>, then the <em>interactions</em>, then the <em>contributions</em>.
+Summing the contributions gets the solution.</p>
+<dl class="simple">
+<dt>Weights</dt><dd><p>The <a class="reference internal" href="reference.html#pybbfmm.weights" title="pybbfmm.weights"><code class="xref py py-func docutils literal notranslate"><span class="pre">weights()</span></code></a> are effectively Chebyshev-approximations of the charge density across each cell.
+They’re evaluated by starting at the bottom of the tree, at the leaf boxes, and recursively merging approximations
+until the algorithm reaches the root.</p>
+</dd>
+<dt>Interactions</dt><dd><p>The interactions use the weights calculated previously to evaluate the field contributions between specific
+pairs of boxes, sources and targets. These pairs come from the u-, v-, w-, x- schemes described above.
+They’re evaluated as the algorithm moves from the root down the tree</p>
+</dd>
+<dt>Contributions</dt><dd><p>When the algorithm returns to the leaf boxes, through the interaction calculations it’s accumulated a
+<a class="reference internal" href="reference.html#pybbfmm.far_field" title="pybbfmm.far_field"><code class="xref py py-func docutils literal notranslate"><span class="pre">far_field()</span></code></a> approximation of how all the sources that are more than one box away from a specific
+box generate the field at the center of that specific box. The final step is to sum this far field contribution
+with the <code class="xref py py-func docutils literal notranslate"><span class="pre">near_field()</span></code> contribution that comes from sources at most one box away.</p>
+</dd>
+</dl>
+<p class="rubric">Footnotes</p>
+<dl class="footnote brackets">
+<dt class="label" id="carrier88"><span class="brackets"><a class="fn-backref" href="#id1">1</a></span></dt>
+<dd><p><a class="reference external" href="https://pdfs.semanticscholar.org/97f0/d2a31d818ede922c9a59dc17f710642332ca.pdf">Carrier, Greengard &amp; Rokhlin 1988, A Fast Adaptive Multipole Algorithm for Particle Simulations</a></p>
+</dd>
+</dl>
+</div>
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+    <div class="clearer"></div>
+  </div>
+    <div class="footer">
+      &copy;2020, Andy L. Jones.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.1.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="_sources/concepts.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
