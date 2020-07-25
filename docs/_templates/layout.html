@@ -1,12 +1,23 @@
 {% extends "!layout.html" %}
 
 {% block extrahead %}
-<script async src="https://www.googletagmanager.com/gtag/js?id=UA-48268620-1"></script>
-<script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
-    gtag('config', 'UA-48268620-1');
-</script>
+    <!-- Monitoring pageviews is really useful to me to see what kind of stuff I've done is useful to everyone else.
+    But I'm keen to not to track any more than that, and so this is a minimal, self-hosted solution. It records
+    nothing more than'd be in the server logs. -->
+    <script>
+      url = "https://live.andyljones.com/mat/mat.php";
+      xhr = new XMLHttpRequest();
+      xhr.open("POST", url, true);
+      xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+
+      params = 'idsite=1&rec=1'
+      params += '&url=' + encodeURIComponent(window.location.href);
+      params += '&urlref=' + encodeURIComponent(document.referrer);
+      params += '&rand=' + Math.floor(16384*Math.random())
+      xhr.send(params)
+    </script>
+    <noscript>
+      <img src="https://live.andyljones.com/mat/mat.php?idsite=1&amp;rec=1" style="border:0" alt=""/>
+    </noscript>
 {{ super() }}
 {% endblock %}
